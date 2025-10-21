@@ -1,0 +1,89 @@
+{
+  "name": "openfoam-language-support",
+  "displayName": "OpenFOAM Language Support",
+  "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
+  "version": "0.1.0",
+  "publisher": "openfoam",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "OpenFOAM",
+    "CFD",
+    "dictionary",
+    "foam"
+  ],
+  "activationEvents": [
+    "onLanguage:openfoam"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "openfoam",
+        "aliases": [
+          "OpenFOAM",
+          "openfoam"
+        ],
+        "extensions": [
+          ".foam",
+          ".dict"
+        ],
+        "filenames": [
+          "controlDict",
+          "fvSchemes",
+          "fvSolution",
+          "blockMeshDict",
+          "snappyHexMeshDict",
+          "decomposeParDict",
+          "transportProperties",
+          "turbulenceProperties",
+          "thermophysicalProperties",
+          "dynamicMeshDict",
+          "topoSetDict",
+          "createPatchDict",
+          "refineMeshDict",
+          "setFieldsDict"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "openfoam",
+        "scopeName": "source.openfoam",
+        "path": "./syntaxes/openfoam.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "openfoam.refreshKeywordDB",
+        "title": "OpenFOAM: Refresh Keyword Database"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "pretest": "npm run compile",
+    "extract-keywords": "node out/extractor/extractKeywords.js",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0",
+    "vscode-languageserver": "^8.1.0",
+    "vscode-languageserver-textdocument": "^1.0.8"
+  }
+}
