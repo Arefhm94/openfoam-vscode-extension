@@ -4,6 +4,10 @@
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
   "version": "0.1.0",
   "publisher": "openfoam",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Arefhm94/openfoam-vscode-extension.git"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -15,9 +19,6 @@
     "CFD",
     "dictionary",
     "foam"
-  ],
-  "activationEvents": [
-    "onLanguage:openfoam"
   ],
   "main": "./out/extension.js",
   "contributes": {
