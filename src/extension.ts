@@ -7,6 +7,7 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 import { WorkflowPanel } from "./workflow/WorkflowPanel";
+import { OpenFOAMDocumentSymbolProvider } from "./providers/OpenFOAMDocumentSymbolProvider";
 
 let client: LanguageClient;
 
@@ -53,10 +54,88 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  // Register Document Symbol Provider for outline view
+  const documentSymbolProvider =
+    vscode.languages.registerDocumentSymbolProvider(
+      { language: "openfoam" },
+      new OpenFOAMDocumentSymbolProvider(),
+    );
+
+  // Auto-detect OpenFOAM files based on directory structure
+  const autoDetectDisposable = vscode.workspace.onDidOpenTextDocument(
+    async (document) => {
+      // Skip if already set to openfoam or if it's not a file
+      if (
+        document.languageId === "openfoam" ||
+        document.uri.scheme !== "file"
+      ) {
+        return;
+      }
+
+      const filePath = document.uri.fsPath;
+      const fileName = path.basename(filePath);
+      const dirName = path.basename(path.dirname(filePath));
+
+      // Check if file is in OpenFOAM-related directories
+      const isInOpenFOAMDir =
+        filePath.includes("/system/") ||
+        filePath.includes("/constant/") ||
+        /\/\d+(\.\d+)?\//.test(filePath) || // Time directories like /0/, /1/, /0.5/
+        dirName === "system" ||
+        dirName === "constant" ||
+        /^\d+(\.\d+)?$/.test(dirName); // Directory name is a number
+
+      // Check if file has no extension or has .orig extension
+      const hasNoExtension = !fileName.includes(".");
+      const hasOrigExtension = fileName.endsWith(".orig");
+
+      // Auto-detect if in OpenFOAM directory structure and has no extension
+      if (isInOpenFOAMDir && (hasNoExtension || hasOrigExtension)) {
+        try {
+          await vscode.languages.setTextDocumentLanguage(document, "openfoam");
+        } catch (error) {
+          console.error("Failed to set language mode:", error);
+        }
+      }
+    },
+  );
+
+  // Also check currently open documents on activation
+  vscode.workspace.textDocuments.forEach(async (document) => {
+    if (document.languageId === "openfoam" || document.uri.scheme !== "file") {
+      return;
+    }
+
+    const filePath = document.uri.fsPath;
+    const fileName = path.basename(filePath);
+    const dirName = path.basename(path.dirname(filePath));
+
+    const isInOpenFOAMDir =
+      filePath.includes("/system/") ||
+      filePath.includes("/constant/") ||
+      /\/\d+(\.\d+)?\//.test(filePath) ||
+      dirName === "system" ||
+      dirName === "constant" ||
+      /^\d+(\.\d+)?$/.test(dirName);
+
+    const hasNoExtension = !fileName.includes(".");
+    const hasOrigExtension = fileName.endsWith(".orig");
+
+    if (isInOpenFOAMDir && (hasNoExtension || hasOrigExtension)) {
+      try {
+        await vscode.languages.setTextDocumentLanguage(document, "openfoam");
+      } catch (error) {
+        console.error("Failed to set language mode:", error);
+      }
+    }
+  });
+
   context.subscriptions.push(
     refreshCommand,
     setLanguageCommand,
     workflowCommand,
+    documentSymbolProvider,
+    autoDetectDisposable,
   );
 
   console.log("OpenFOAM Language Support extension activated");
