@@ -12,16 +12,16 @@ import {
   SignatureHelp,
   SignatureInformation,
   ParameterInformation,
-  InitializeResult
-} from 'vscode-languageserver/node';
+  InitializeResult,
+} from "vscode-languageserver/node";
 
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import * as fs from 'fs';
-import * as path from 'path';
+import { TextDocument } from "vscode-languageserver-textdocument";
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  * OpenFOAM Language Server
- * 
+ *
  * Provides IntelliSense features for OpenFOAM dictionary files:
  * - Hover: Show keyword descriptions and parameters
  * - Completion: Suggest keywords with snippets
@@ -87,20 +87,20 @@ class OpenFOAMLanguageServer {
    * Initialize the language server
    */
   private onInitialize(params: InitializeParams): InitializeResult {
-    console.log('Initializing OpenFOAM Language Server...');
-    
+    console.log("Initializing OpenFOAM Language Server...");
+
     const result: InitializeResult = {
       capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         hoverProvider: true,
         completionProvider: {
           resolveProvider: true,
-          triggerCharacters: [' ', '\n', '\t', '{']
+          triggerCharacters: [" ", "\n", "\t", "{"],
         },
         signatureHelpProvider: {
-          triggerCharacters: [' ', '\t']
-        }
-      }
+          triggerCharacters: [" ", "\t"],
+        },
+      },
     };
 
     return result;
@@ -110,7 +110,7 @@ class OpenFOAMLanguageServer {
    * Server initialized - load keyword database
    */
   private onInitialized(): void {
-    console.log('Server initialized, loading keyword database...');
+    console.log("Server initialized, loading keyword database...");
     this.loadKeywordDatabase();
   }
 
@@ -119,27 +119,30 @@ class OpenFOAMLanguageServer {
    */
   private loadKeywordDatabase(): void {
     try {
-      // Try to find the keyword database
+      // Try to find the keyword database (relative to the compiled server.js location)
       const possiblePaths = [
-        path.join(__dirname, '..', 'data', 'openfoam-keywords.json'),
-        path.join(__dirname, '..', '..', 'data', 'openfoam-keywords.json'),
-        path.join(process.cwd(), 'data', 'openfoam-keywords.json')
+        path.join(__dirname, "..", "data", "openfoam-keywords.json"),
+        path.join(__dirname, "..", "..", "data", "openfoam-keywords.json"),
       ];
 
       let dbPath: string | null = null;
       for (const p of possiblePaths) {
+        console.log(`Checking for keyword database at: ${p}`);
         if (fs.existsSync(p)) {
           dbPath = p;
+          console.log(`Found keyword database at: ${dbPath}`);
           break;
         }
       }
 
       if (!dbPath) {
-        console.error('Keyword database not found. Please run keyword extraction first.');
+        const errorMsg = `Keyword database not found. Searched paths:\n${possiblePaths.join("\n")}`;
+        console.error(errorMsg);
+        this.connection.console.error(errorMsg);
         return;
       }
 
-      const dbContent = fs.readFileSync(dbPath, 'utf-8');
+      const dbContent = fs.readFileSync(dbPath, "utf-8");
       const database: KeywordDatabase = JSON.parse(dbContent);
 
       console.log(`Loading ${database.keywordCount} keywords from database...`);
@@ -147,9 +150,9 @@ class OpenFOAMLanguageServer {
       // Build keyword maps
       for (const keyword of database.keywords) {
         this.keywordMap.set(keyword.name.toLowerCase(), keyword);
-        
+
         // Group by category
-        const category = keyword.category || 'other';
+        const category = keyword.category || "other";
         if (!this.keywordsByCategory.has(category)) {
           this.keywordsByCategory.set(category, []);
         }
@@ -157,10 +160,14 @@ class OpenFOAMLanguageServer {
       }
 
       console.log(`Loaded ${this.keywordMap.size} keywords successfully`);
-      this.connection.console.log(`OpenFOAM Language Server ready with ${this.keywordMap.size} keywords`);
+      this.connection.console.log(
+        `OpenFOAM Language Server ready with ${this.keywordMap.size} keywords`,
+      );
     } catch (error) {
-      console.error('Error loading keyword database:', error);
-      this.connection.console.error(`Failed to load keyword database: ${error}`);
+      console.error("Error loading keyword database:", error);
+      this.connection.console.error(
+        `Failed to load keyword database: ${error}`,
+      );
     }
   }
 
@@ -188,8 +195,8 @@ class OpenFOAMLanguageServer {
     return {
       contents: {
         kind: MarkupKind.Markdown,
-        value: content
-      }
+        value: content,
+      },
     };
   }
 
@@ -201,25 +208,27 @@ class OpenFOAMLanguageServer {
     content += `${keyword.description}\n\n`;
 
     if (keyword.parameters && keyword.parameters.length > 0) {
-      content += '**Parameters:**\n\n';
+      content += "**Parameters:**\n\n";
       for (const param of keyword.parameters) {
-        const required = param.required ? '_required_' : '_optional_';
-        const typeInfo = param.type ? ` \`${param.type}\`` : '';
-        const defaultInfo = param.defaultValue ? ` (default: \`${param.defaultValue}\`)` : '';
+        const required = param.required ? "_required_" : "_optional_";
+        const typeInfo = param.type ? ` \`${param.type}\`` : "";
+        const defaultInfo = param.defaultValue
+          ? ` (default: \`${param.defaultValue}\`)`
+          : "";
         content += `- **${param.name}**${typeInfo} - ${required}${defaultInfo}`;
         if (param.description) {
           content += `\n  ${param.description}`;
         }
-        content += '\n';
+        content += "\n";
       }
-      content += '\n';
+      content += "\n";
     }
 
     if (keyword.examples && keyword.examples.length > 0) {
-      content += '**Example:**\n\n';
-      content += '```openfoam\n';
+      content += "**Example:**\n\n";
+      content += "```openfoam\n";
       content += keyword.examples[0];
-      content += '\n```\n';
+      content += "\n```\n";
     }
 
     if (keyword.sourceFile) {
@@ -249,11 +258,11 @@ class OpenFOAMLanguageServer {
         detail: keyword.description,
         documentation: {
           kind: MarkupKind.Markdown,
-          value: this.formatKeywordHover(keyword)
+          value: this.formatKeywordHover(keyword),
         },
         insertText: this.generateInsertText(keyword),
         insertTextFormat: 2, // Snippet format
-        sortText: this.getSortText(keyword, context)
+        sortText: this.getSortText(keyword, context),
       };
 
       items.push(item);
@@ -273,7 +282,9 @@ class OpenFOAMLanguageServer {
   /**
    * Handle signature help requests
    */
-  private onSignatureHelp(params: TextDocumentPositionParams): SignatureHelp | null {
+  private onSignatureHelp(
+    params: TextDocumentPositionParams,
+  ): SignatureHelp | null {
     const document = this.documents.get(params.textDocument.uri);
     if (!document) {
       return null;
@@ -293,24 +304,24 @@ class OpenFOAMLanguageServer {
       label: this.formatSignatureLabel(keyword),
       documentation: {
         kind: MarkupKind.Markdown,
-        value: keyword.description
+        value: keyword.description,
       },
-      parameters: keyword.parameters.map(param => {
+      parameters: keyword.parameters.map((param) => {
         const paramInfo: ParameterInformation = {
           label: param.name,
           documentation: {
             kind: MarkupKind.Markdown,
-            value: param.description || ''
-          }
+            value: param.description || "",
+          },
         };
         return paramInfo;
-      })
+      }),
     };
 
     return {
       signatures: [signature],
       activeSignature: 0,
-      activeParameter: 0
+      activeParameter: 0,
     };
   }
 
@@ -322,10 +333,12 @@ class OpenFOAMLanguageServer {
       return keyword.name;
     }
 
-    const params = keyword.parameters.map(p => {
-      const opt = p.required ? '' : '?';
-      return `${p.name}${opt}`;
-    }).join(', ');
+    const params = keyword.parameters
+      .map((p) => {
+        const opt = p.required ? "" : "?";
+        return `${p.name}${opt}`;
+      })
+      .join(", ");
 
     return `${keyword.name}(${params})`;
   }
@@ -338,13 +351,14 @@ class OpenFOAMLanguageServer {
     const offset = document.offsetAt(position);
     const before = text.substring(Math.max(0, offset - 100), offset);
 
-    if (before.includes('FoamFile')) return 'header';
-    if (before.includes('controlDict')) return 'control';
-    if (before.includes('fvSchemes')) return 'scheme';
-    if (before.includes('fvSolution')) return 'solver';
-    if (before.includes('boundaryField') || before.includes('type')) return 'boundary';
+    if (before.includes("FoamFile")) return "header";
+    if (before.includes("controlDict")) return "control";
+    if (before.includes("fvSchemes")) return "scheme";
+    if (before.includes("fvSolution")) return "solver";
+    if (before.includes("boundaryField") || before.includes("type"))
+      return "boundary";
 
-    return 'general';
+    return "general";
   }
 
   /**
@@ -352,19 +366,19 @@ class OpenFOAMLanguageServer {
    */
   private getCompletionKind(category: string): CompletionItemKind {
     switch (category) {
-      case 'control':
+      case "control":
         return CompletionItemKind.Property;
-      case 'solver':
+      case "solver":
         return CompletionItemKind.Method;
-      case 'scheme':
+      case "scheme":
         return CompletionItemKind.Function;
-      case 'boundary':
+      case "boundary":
         return CompletionItemKind.Class;
-      case 'function':
+      case "function":
         return CompletionItemKind.Module;
-      case 'property':
+      case "property":
         return CompletionItemKind.Field;
-      case 'utility':
+      case "utility":
         return CompletionItemKind.Unit;
       default:
         return CompletionItemKind.Keyword;
@@ -388,19 +402,20 @@ class OpenFOAMLanguageServer {
     }
 
     // Keywords with parameters - create snippet with sub-dictionary
-    if (keyword.parameters.length === 1 && !keyword.name.includes('Schemes')) {
+    if (keyword.parameters.length === 1 && !keyword.name.includes("Schemes")) {
       const param = keyword.parameters[0];
-      const value = param.defaultValue || '${1:value}';
+      const value = param.defaultValue || "${1:value}";
       return `${keyword.name}        ${value};`;
     }
 
     // Complex keywords with multiple parameters
     let snippet = `${keyword.name}\n{\n`;
     keyword.parameters.forEach((param, index) => {
-      const value = param.defaultValue || `\${${index + 1}:${param.type || 'value'}}`;
+      const value =
+        param.defaultValue || `\${${index + 1}:${param.type || "value"}}`;
       snippet += `    ${param.name}        ${value};\n`;
     });
-    snippet += '}';
+    snippet += "}";
 
     return snippet;
   }
@@ -411,28 +426,31 @@ class OpenFOAMLanguageServer {
   private getSortText(keyword: KeywordInfo, context: string): string {
     // Prioritize keywords matching the context
     if (keyword.category === context) {
-      return '0_' + keyword.name;
+      return "0_" + keyword.name;
     }
 
     // Secondary priority for related categories
     const priorities: { [key: string]: string[] } = {
-      'control': ['property', 'function'],
-      'solver': ['scheme', 'property'],
-      'scheme': ['solver'],
-      'boundary': ['property']
+      control: ["property", "function"],
+      solver: ["scheme", "property"],
+      scheme: ["solver"],
+      boundary: ["property"],
     };
 
     if (priorities[context]?.includes(keyword.category)) {
-      return '1_' + keyword.name;
+      return "1_" + keyword.name;
     }
 
-    return '2_' + keyword.name;
+    return "2_" + keyword.name;
   }
 
   /**
    * Get word at cursor position
    */
-  private getWordAtPosition(document: TextDocument, position: any): string | null {
+  private getWordAtPosition(
+    document: TextDocument,
+    position: any,
+  ): string | null {
     const text = document.getText();
     const offset = document.offsetAt(position);
 
