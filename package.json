@@ -2,7 +2,7 @@
   "name": "openfoam-language-support",
   "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "publisher": "arefhm94",
   "repository": {
     "type": "git",
@@ -82,6 +82,11 @@
       {
         "command": "openfoam.setLanguageMode",
         "title": "OpenFOAM: Set Language Mode"
+      },
+      {
+        "command": "openfoam.openWorkflow",
+        "title": "OpenFOAM: Open Case Workflow",
+        "icon": "$(graph)"
       }
     ],
     "configuration": {

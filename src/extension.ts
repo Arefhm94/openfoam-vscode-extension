@@ -6,6 +6,7 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
+import { WorkflowPanel } from "./workflow/WorkflowPanel";
 
 let client: LanguageClient;
 
@@ -45,7 +46,18 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push(refreshCommand, setLanguageCommand);
+  const workflowCommand = vscode.commands.registerCommand(
+    "openfoam.openWorkflow",
+    () => {
+      WorkflowPanel.createOrShow(context.extensionUri);
+    },
+  );
+
+  context.subscriptions.push(
+    refreshCommand,
+    setLanguageCommand,
+    workflowCommand,
+  );
 
   console.log("OpenFOAM Language Support extension activated");
 }
