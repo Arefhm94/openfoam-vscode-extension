@@ -2,7 +2,7 @@
   "name": "openfoam-language-support",
   "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "arefhm94",
   "repository": {
     "type": "git",
@@ -20,6 +20,8 @@
     "dictionary",
     "foam"
   ],
+  "license": "GPL-3.0",
+  "icon": "logo.png",
   "main": "./out/extension.js",
   "contributes": {
     "languages": [

@@ -1,393 +1,193 @@
 # OpenFOAM Language Support for VS Code
 
-A comprehensive VS Code extension providing syntax highlighting and IntelliSense for OpenFOAM dictionary files.
+![OpenFOAM Language Support Logo](logo.png)
 
-## Features
+A comprehensive VS Code extension providing syntax highlighting, IntelliSense, and workflow management for OpenFOAM dictionary files.
+
+## ✨ Features
 
 ### 🎨 Syntax Highlighting
-- Color-coded tokens for keywords, values, comments, strings, and numbers
-- Support for OpenFOAM dictionary syntax including:
-  - FoamFile headers
-  - Dictionary blocks with braces
-  - Include directives (`#include`, `#includeEtc`, etc.)
-  - Comments (C++ style `//` and `/* */`)
-  - Scientific notation numbers
+
+Color-coded tokens for keywords, values, comments, strings, and numbers with full OpenFOAM dictionary syntax support.
 
 ### 🧠 IntelliSense
 
-#### Hover Information
-Hover over any OpenFOAM keyword to see:
-- Concise description of the keyword
-- Required and optional parameters
-- Parameter types and default values
-- Usage examples
-- Source file reference (where extracted from)
+- **Hover Information**: Detailed documentation for 100+ OpenFOAM keywords
+- **Auto-Completion**: Context-aware suggestions with parameter templates
+- **Signature Help**: Parameter information while typing
 
-#### Auto-Completion
-- Context-aware keyword suggestions
-- Snippet-style completions with tab stops
-- Parameter templates for complex keywords
-- Prioritized suggestions based on file context
+### 📋 Outline View
 
-#### Signature Help
-- Parameter information while typing
-- Shows parameter names, types, and descriptions
-- Indicates required vs. optional parameters
+Hierarchical document structure with colored icons:
 
-## Supported File Types
+- 🔵 **Blue** - FoamFile headers, geometry blocks
+- 🟡 **Yellow** - Scheme blocks (fvSchemes, fvSolution)
+- 🟣 **Purple** - Solver settings, boolean values
+- 🔵 **Cyan** - Mesh controls, numeric values
+- 🟠 **Orange** - Layer controls, string values
+- 🟢 **Green** - Properties, field values
 
-The extension automatically activates for:
+### 🔧 Workflow Panel
 
-### File Extensions
-- `.foam` - OpenFOAM case files
-- `.dict` - Dictionary files
+Interactive case management with parameter editing:
 
-### Specific Filenames
-- `controlDict` - Simulation control parameters
-- `fvSchemes` - Discretization schemes
-- `fvSolution` - Linear solver settings
-- `blockMeshDict` - Mesh generation
-- `snappyHexMeshDict` - Advanced meshing
-- `decomposeParDict` - Parallel decomposition
-- `transportProperties` - Physical properties
-- `turbulenceProperties` - Turbulence model settings
-- `thermophysicalProperties` - Thermophysical properties
-- And many more...
+- **System Files**: controlDict, fvSchemes, fvSolution, helyxHexMeshDict, caseSetupDict
+- **Constant Files**: transportProperties, turbulenceProperties, RASProperties
+- **Boundary Conditions**: All 0/ directory field files
+- **Inline Editing**: Modify parameters directly in the workflow view
 
-## Installation
+### 📁 Auto-Detection
+
+Automatically recognizes OpenFOAM files in:
+
+- `system/` directory (controlDict, fvSchemes, etc.)
+- `constant/` directory (transportProperties, etc.)
+- Time directories (`0/`, `1/`, `0.5/`, etc.)
+- Files without extensions (U, p, k, epsilon, etc.)
+
+## 🚀 Installation
+
+### Quick Install (Recommended)
+
+```bash
+# Download and install the latest .vsix file
+code --install-extension openfoam-language-support-0.4.0.vsix
+```
 
 ### From Source
 
-1. **Clone or copy the extension to your workspace:**
-   ```bash
-   cd /path/to/OpenFOAM-13-master/openfoam-vscode-extension
-   ```
+```bash
+git clone https://github.com/arefhm94/openfoam-vscode-extension.git
+cd openfoam-vscode-extension
+npm install
+npm run compile
+npm run extract-keywords  # Extract from OpenFOAM source
+code --install-extension openfoam-language-support-0.4.0.vsix
+```
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+## 📖 Usage
 
-3. **Extract OpenFOAM keywords (important!):**
-   ```bash
-   npm run compile
-   npm run extract-keywords
-   ```
-   
-   Or specify a custom OpenFOAM source directory:
-   ```bash
-   node out/extractor/extractKeywords.js /path/to/OpenFOAM-source
-   ```
+### Basic Workflow
 
-4. **Compile the extension:**
-   ```bash
-   npm run compile
-   ```
+1. Open any OpenFOAM case directory
+2. Files automatically detect as OpenFOAM language
+3. Use `Ctrl+Shift+O` for outline navigation
+4. Click the graph icon (📊) for workflow panel
+5. Hover over keywords for documentation
 
-5. **Package the extension (optional):**
-   ```bash
-   npm install -g vsce
-   vsce package
-   ```
-   This creates a `.vsix` file you can install.
+### Outline View Example
 
-6. **Install in VS Code:**
-   - Method 1: Copy the extension folder to `~/.vscode/extensions/`
-   - Method 2: In VS Code, press `F5` to launch Extension Development Host
-   - Method 3: Install the `.vsix` file via Extensions panel → "..." → Install from VSIX
+```text
+📁 FoamFile
+📁 ddtSchemes
+  📄 default: Euler
+📁 gradSchemes
+  📄 default: Gauss linear
+📁 divSchemes
+  📄 div(rhoPhi,U): Gauss upwind
+📁 laplacianSchemes
+  📄 default: Gauss linear corrected
+```
 
-## Usage
+### Workflow Panel Example
 
-### Basic Usage
+![alt text](image.png)
 
-1. Open any OpenFOAM dictionary file (`controlDict`, `fvSchemes`, etc.)
-2. The extension activates automatically
-3. Start typing to see completions
-4. Hover over keywords for documentation
-5. Use `Ctrl+Space` to trigger completions manually
+## 🔧 Commands
 
-### Refreshing the Keyword Database
+- `OpenFOAM: Open Case Workflow` - Launch interactive workflow panel
+- `OpenFOAM: Refresh Keyword Database` - Update from OpenFOAM source
+- `OpenFOAM: Set Language Mode` - Manually set file language
 
-If you update your OpenFOAM source or want to extract from a different version:
+## 📋 Supported Files
 
-1. **Via Command Palette:**
-   - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
-   - Type "OpenFOAM: Refresh Keyword Database"
-   - Enter your OpenFOAM source directory path
-   - Wait for extraction to complete
-   - Reload VS Code window
+### System Directory
 
-2. **Via Terminal:**
-   ```bash
-   cd /path/to/openfoam-vscode-extension
-   node out/extractor/extractKeywords.js /path/to/OpenFOAM-source
-   # Then reload VS Code
-   ```
+- `controlDict` - Simulation control
+- `fvSchemes` - Discretization schemes
+- `fvSolution` - Solver settings
+- `helyxHexMeshDict` - Helyx mesh generation
+- `caseSetupDict` - Helyx case configuration
+- `fvOptions` - Source terms
+- `topoSetDict` - Topology manipulation
 
-## Development
+### Constant Directory
+
+- `transportProperties` - Physical properties
+- `turbulenceProperties` - Turbulence models
+- `RASProperties` - Reynolds-Averaged Simulation
+- `phaseProperties` - Multi-phase settings
+- `g` - Gravity vector
+- `momentumTransport` - Transport models
+
+### Boundary Conditions (0/ directory)
+
+- `U` - Velocity field
+- `p`, `p_rgh` - Pressure fields
+- `k`, `epsilon`, `omega` - Turbulence fields
+- `alpha.*` - Phase fraction fields
+- `T` - Temperature field
+
+## 🔄 Version History
+
+### 0.4.0 (Latest)
+
+- ✅ **Colored outline icons** with semantic categorization
+- ✅ **Enhanced Helyx support** (helyxHexMeshDict, caseSetupDict)
+- ✅ **Auto-detection** for files in OpenFOAM directories
+- ✅ **Improved outline parsing** for complex dictionary structures
+
+### 0.3.0
+
+- ✅ **Workflow panel** with parameter editing
+- ✅ **Boundary condition scanning** from 0/ directory
+- ✅ **Inline parameter editing** in workflow view
+
+### 0.2.0
+
+- ✅ **Helyx file support** (RASProperties, regionProperties)
+- ✅ **Extended system files** (fvOptions, topoSetDict, etc.)
+
+### 0.1.0
+
+- ✅ **Basic syntax highlighting** for OpenFOAM dictionaries
+- ✅ **IntelliSense** with 100+ keywords
+- ✅ **Keyword extraction** from OpenFOAM source
+
+## 🛠️ Development
 
 ### Project Structure
 
-```
-openfoam-vscode-extension/
-├── package.json                    # Extension manifest
-├── tsconfig.json                   # TypeScript configuration
-├── language-configuration.json     # Language configuration
+```text
 ├── src/
-│   ├── extension.ts               # Extension entry point
-│   ├── language-server/
-│   │   └── server.ts              # Language server implementation
-│   └── extractor/
-│       └── extractKeywords.ts     # Keyword extraction script
-├── syntaxes/
-│   └── openfoam.tmLanguage.json   # TextMate grammar
-├── data/
-│   └── openfoam-keywords.json     # Generated keyword database
-├── examples/
-│   ├── controlDict                # Example OpenFOAM files
-│   ├── fvSchemes
-│   ├── fvSolution
-│   └── U
-└── README.md                       # This file
+│   ├── extension.ts                 # Main extension
+│   ├── workflow/WorkflowPanel.ts    # Workflow UI
+│   ├── providers/                   # Language features
+│   └── extractor/                   # Keyword extraction
+├── syntaxes/openfoam.tmLanguage.json # Syntax grammar
+├── data/openfoam-keywords.json      # Keyword database
+└── examples/                        # Test cases
 ```
 
-### Building and Debugging
+### Building
 
-**Compile TypeScript:**
 ```bash
-npm run compile
+npm run compile          # Build TypeScript
+npm run extract-keywords # Generate keyword database
+vsce package            # Create .vsix package
 ```
 
-**Watch mode (auto-recompile on changes):**
-```bash
-npm run watch
-```
+## 🤝 Contributing
 
-**Debug the extension:**
-1. Open the extension folder in VS Code
-2. Press `F5` to launch Extension Development Host
-3. Open an OpenFOAM file in the new window
-4. Set breakpoints in the TypeScript source
+Contributions welcome! Areas for improvement:
 
-**Debug the language server:**
-The language server runs in a separate process. To debug:
-1. Uncomment the `--inspect` line in `src/extension.ts`
-2. Launch the extension with `F5`
-3. Attach a debugger to the language server process (port 6009)
+- Keyword coverage expansion
+- Parser improvements (AST-based)
+- Diagnostic capabilities
+- Test coverage
 
-### Keyword Extraction Process
+## 📄 License
 
-The keyword extractor (`src/extractor/extractKeywords.ts`) performs the following:
-
-1. **Hardcoded Keywords:** Adds ~100 essential OpenFOAM keywords with detailed documentation
-2. **Source Scanning:** 
-   - Walks the OpenFOAM source tree (`src/`, `applications/`, `etc/`)
-   - Extracts keywords from C++ files using regex patterns:
-     - `dict.lookup()` and `lookupOrDefault()` calls
-     - String literals in dictionary access patterns
-   - Extracts keywords from OpenFOAM dictionary templates
-3. **Documentation Extraction:**
-   - Searches for Doxygen-style comments (`//!`, `///`, `/* */`)
-   - Extracts inline comments near keyword usage
-4. **Categorization:** Automatically categorizes keywords:
-   - `control` - Time and simulation control
-   - `solver` - Linear solver settings
-   - `scheme` - Discretization schemes
-   - `boundary` - Boundary conditions
-   - `function` - Function objects
-   - `property` - Physical properties
-   - `utility` - Mesh utilities
-5. **Output:** Generates `data/openfoam-keywords.json` with structured data
-
-### Keyword Database Format
-
-```json
-{
-  "version": "1.0.0",
-  "generatedAt": "2025-10-22T...",
-  "sourceRoot": "/path/to/OpenFOAM",
-  "keywordCount": 150,
-  "keywords": [
-    {
-      "name": "deltaT",
-      "description": "Time step size (seconds)",
-      "category": "control",
-      "parameters": [
-        {
-          "name": "value",
-          "type": "scalar",
-          "required": true,
-          "description": "Time step in seconds"
-        }
-      ],
-      "examples": [
-        "deltaT          0.001;"
-      ],
-      "sourceFile": "src/OpenFOAM/..."
-    }
-  ]
-}
-```
-
-## Coverage
-
-### Implemented Keywords (~100+ essential keywords)
-
-**Control Keywords:**
-- `application`, `startFrom`, `startTime`, `stopAt`, `endTime`
-- `deltaT`, `writeControl`, `writeInterval`, `writeFormat`
-- `adjustTimeStep`, `maxCo`, `maxAlphaCo`, `runTimeModifiable`
-
-**Solver Keywords:**
-- `solver`, `preconditioner`, `tolerance`, `relTol`
-- `minIter`, `maxIter`, `smoother`, `nSweeps`
-- `GAMG`, `PCG`, `PBiCG`, `smoothSolver`
-
-**Scheme Keywords:**
-- `ddtSchemes`, `gradSchemes`, `divSchemes`, `laplacianSchemes`
-- `Euler`, `backward`, `CrankNicolson`, `steadyState`
-- `Gauss`, `linear`, `upwind`, `linearUpwind`, `vanLeer`, `LUST`
-
-**Boundary Conditions:**
-- `fixedValue`, `zeroGradient`, `calculated`, `mixed`
-- `inletOutlet`, `slip`, `noSlip`, `symmetry`, `empty`
-- `type`, `value`, `boundaryField`, `internalField`
-
-Additional keywords are extracted from your OpenFOAM source during the extraction process.
-
-## Known Limitations
-
-### Current Implementation
-
-1. **Regex-based extraction:** The keyword extractor uses regular expressions rather than full C++ AST parsing. This means:
-   - Some complex keyword patterns may be missed
-   - False positives may occur for generic string literals
-   - Nested namespace and class context is not fully captured
-
-2. **Documentation quality:** Documentation quality depends on:
-   - Presence of comments in the source code
-   - Proximity of comments to keyword usage
-   - Doxygen-style documentation availability
-
-3. **No diagnostics:** The current version does not provide:
-   - Syntax error checking
-   - Value validation
-   - Required parameter verification
-   - Type checking
-
-4. **Limited signature help:** Signature help is basic and doesn't track cursor position within parameter lists
-
-5. **Static database:** The keyword database must be manually regenerated when:
-   - Switching OpenFOAM versions
-   - Updating the OpenFOAM source
-   - Adding custom keywords
-
-## Future Improvements
-
-### High Priority
-- [ ] Add proper C++ AST parsing for keyword extraction (using libclang or tree-sitter)
-- [ ] Implement diagnostics for syntax errors
-- [ ] Add value validation based on parameter types
-- [ ] Improve signature help with active parameter tracking
-- [ ] Support for OpenFOAM dictionary inheritance and `#include` resolution
-
-### Medium Priority
-- [ ] Add code actions (quick fixes) for common issues
-- [ ] Implement document formatting
-- [ ] Add snippets for common dictionary patterns
-- [ ] Support for field file templates
-- [ ] Integration with OpenFOAM version detection
-
-### Low Priority
-- [ ] Go-to-definition for included files
-- [ ] Find references for dictionary keys
-- [ ] Workspace-wide symbol search
-- [ ] Integration with OpenFOAM case validation tools
-- [ ] Support for foam file system links
-
-## Contributing
-
-This is a first-draft extension skeleton. Contributions are welcome!
-
-### Areas for Contribution
-1. **Keyword coverage:** Add more keywords and better documentation
-2. **Parser improvements:** Replace regex with proper parsing
-3. **Diagnostics:** Add syntax and semantic checking
-4. **Testing:** Add unit and integration tests
-5. **Documentation:** Improve user and developer documentation
-
-### Development TODO Comments
-
-The code contains TODO comments marking areas needing improvement:
-- `TODO: Enhance with proper C++ AST parsing`
-- `TODO: Add support for parsing OpenFOAM dictionary files directly`
-- `TODO: Replace regex-based extraction with proper C++ AST parsing`
-- `TODO: Handle nested class definitions and namespaces better`
-
-## Testing
-
-### Manual Testing
-
-1. Open the example files in `examples/`
-2. Verify syntax highlighting appears correctly
-3. Hover over keywords like `deltaT`, `solver`, `type`
-4. Start typing in a dictionary and check completions
-5. Test with your own OpenFOAM cases
-
-### Test Checklist
-
-- [ ] Syntax highlighting works for all token types
-- [ ] Hover shows information for essential keywords
-- [ ] Completions appear when typing
-- [ ] Completions insert correct snippet format
-- [ ] Extension activates for all specified file patterns
-- [ ] Keyword refresh command works
-- [ ] No errors in Developer Tools console
-
-## Troubleshooting
-
-### Extension doesn't activate
-- Check that your file matches one of the supported patterns
-- Look for errors in Developer Tools (Help → Toggle Developer Tools)
-- Ensure the extension is installed and enabled
-
-### No IntelliSense suggestions
-- Verify keyword database exists: `data/openfoam-keywords.json`
-- Run keyword extraction if database is missing
-- Check language server is running (look for "OpenFOAM Language Server" in Output panel)
-- Reload VS Code window
-
-### Keyword extraction fails
-- Ensure you have the correct path to OpenFOAM source
-- Check you have read permissions for the source directory
-- Verify Node.js and TypeScript are installed
-- Check terminal output for specific error messages
-
-### Performance issues
-- The keyword database loading is done once at startup
-- If you have performance issues, check the size of `openfoam-keywords.json`
-- Consider reducing the source scanning scope in `extractKeywords.ts`
-
-## License
-
-This extension is provided as-is for use with OpenFOAM. OpenFOAM is licensed under the GNU General Public License v3.0.
-
-## Credits
-
-- OpenFOAM: The OpenFOAM Foundation (https://openfoam.org)
-- VS Code Extension API: Microsoft
-- Language Server Protocol: Microsoft
-
-## Version History
-
-### 0.1.0 (Initial Release)
-- Basic syntax highlighting for OpenFOAM dictionary files
-- Hover information for ~100 essential keywords
-- Auto-completion with snippets
-- Signature help for parameters
-- Keyword extraction from OpenFOAM source
-- Support for common OpenFOAM file types
+GPL-3.0 (same as OpenFOAM)
 
 ---
-
-**Note:** This is a first-draft extension skeleton designed to be extended and improved. The extraction process uses heuristics and may not capture all keywords or documentation perfectly. Contributions to improve coverage and accuracy are welcome!
