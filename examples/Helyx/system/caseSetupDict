@@ -1,0 +1,395 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX                                                    |
+|   o   O   o      | Version: v3.1.1                                          |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+	version 2.0;
+	format ascii;
+	class dictionary;
+	location system;
+	object caseSetupDict;
+}
+
+global {
+	modificationSwitches {
+        resetInternalFields     true;
+        resetBoundaryFields     true;
+        resetSystemDicts        true;
+        resetConstDicts         true;
+        resetBoundaryMesh       true;
+        deleteUnusedFields      true;
+        reuseExistingDicts      false;
+        strictPatchNameChecking false;
+	}
+
+	system {
+		controlDict {
+			startTime			0;
+			startFrom			latestTime;
+            // startFrom       startTime;
+			deltaT				1;
+			stopAt				endTime;
+			writeControl		timeStep;
+			writeInterval		100;
+			endTime				1000;
+			purgeWrite			1;
+			writeFormat			binary;
+			writeCompression	uncompressed;
+			runTimeModifiable	true;
+		}
+	}
+
+    functions {
+        VR1 {
+            type volumeReport;
+            regions ( region0 );
+            #include "$FOAM_CASE/system/includeDicts/tracer_fieldsEntry"
+            functionObjectLibs ("libreport.so" );
+            writeControl writeTime;
+            writeInterval 1;    
+        }
+
+        VR_Source {
+            type volumeReport;
+            regions ( region0 );
+            #include "$FOAM_CASE/system/includeDicts/tracer_fieldsEntry"
+            functionObjectLibs ("libreport.so" );
+            sets
+            (
+                cellToCell { set ID_01_set; }
+            );
+            writeControl writeTime;
+            writeInterval 1;        
+        }
+
+        probes {
+            functionObjectLibs ( "libsampling.so" );
+            enabled         true;
+            probeLocations       ((507.49 35.85 51.61));
+            #include "$FOAM_CASE/system/includeDicts/tracer_fieldsEntry"
+            libs            ( "libsampling.so" );
+            type            probes;
+            name            probes;
+            writeControl writeTime;
+            writeInterval 1;
+        }
+
+        sampled_surfaces {
+            functionObjectLibs   ("libsampling.so");
+            #include "$FOAM_CASE/system/includeDicts/tracer_fieldsEntry"
+            interpolationScheme  cellPoint;
+            surfaceFormat        vtk;
+            surfaces (
+                sample_surface {
+                    type        patch;
+                    patches     ("terrain.*" onsite_bld offsite_bld);
+                    interpolate false;
+                    maxEdgeLengthSearch true;
+                }
+            );
+            region          region0;
+            type            surfaces;
+            writeControl onEnd;
+            writeInterval 1;
+            executeControl onEnd;
+            executeInterval 1; 
+        }
+
+        vertical_profile_middle {
+            type sets;
+            functionObjectLibs ("libsampling.so");
+            regions ( region0 );
+            fields ( U k p Tr_05 );
+            interpolationScheme cellPoint;
+            setFormat csv;
+            sets
+            (				
+                line_sensor_01 {
+                    type        uniform;
+                    axis        xyz;
+                    nPoints     41;
+                    start       (507.05 35.539 49.905);
+                    end         (507.05 35.539 51.905);
+                }
+
+                line_sensor_02 {
+                    type        uniform;
+                    axis        xyz;
+                    nPoints     41;
+                    start       (508.7 31.403 49.905);
+                    end         (508.7 31.403 51.905);
+                }
+
+                vertical_line_center
+                {
+                    type        uniform;
+                    axis        xyz;
+                    nPoints     100;
+                    start       (0.0 1250.0 0.0);
+                    end         (0.0 1250.0 300.0);
+                }
+            );
+            writeControl onEnd;
+            writeInterval 1;
+            executeControl onEnd;
+            executeInterval 1; 
+        }
+
+        sampled_isos {
+            functionObjectLibs   ("libsampling.so");
+            #include "$FOAM_CASE/system/includeDicts/tracer_fieldsEntry"
+            interpolationScheme  cellPoint;
+            surfaceFormat        vtk;
+            surfaces (
+                iso_Tr_05 {
+                    type        isoSurface;
+                    isoField    Tr_05;
+                    isoValue    0.001;
+                    interpolate true;
+                }
+            );
+            region          region0;
+            type            surfaces;
+            writeControl onEnd;
+            writeInterval 1;
+            executeControl onEnd;
+            executeInterval 1; 
+        }
+	};
+}
+
+regions {
+	region0 {
+		// state               (SIMPLE incompressible ras smoke);
+        state (steady pressureCoupled ras);
+		turbulenceModel     realizableKE;
+		materials           (air);
+
+        materialProperties {
+           air {
+                materialName air;
+                materialType fluid;
+                molWeight 28.96;
+                energy sensibleEnthalpy;
+                equationOfState rhoConst;
+                equationOfStateCoeffs
+                {
+                    rho 0.85;
+                }
+                muModel scalarFunction1;
+                muModelCoeffs
+                {
+                    mu constant 1.661002E-5;
+                }
+                thermodynamics hConst;
+                thermodynamicsCoeffs
+                {
+                    Hf 0.0;
+                    Cp 1006.0;
+                }
+                kappaModel scalarFunction1;
+                kappaModelCoeffs
+                {
+                    kappa 0.0262;
+                }
+                wconcentrationTransport
+                {
+                    D [0 2 -1 0 0 0 0] 2.0E-5;
+                    Sct 0.6;
+                    Cp [0 2 -2 -1 0 0 0] 1006.0;
+                }
+                
+                #include "$FOAM_CASE/system/includeDicts/tracer_transportProperties"
+                
+                buoyancyModelCoeffs
+                {
+                    beta 0.00333;
+                }
+            }
+            
+            referenceFields
+            {
+                TConst [0 0 0 1 0 0 0] 293.15;
+            }            
+		}
+		
+		boundaryMesh {
+			right   { type symmetryPlane; }
+			left    { type symmetryPlane; }
+			top     { type symmetryPlane; }
+			inlet   { type inlet; }
+			outlet  { type outlet; }
+		}
+
+        constant {
+            g {
+                dimensions [0 1 -2 0 0 0 0];
+                value      (0.0 0.0 -9.81);
+            }
+        }
+
+		fieldMaps {
+			#include "$FOAM_CASE/system/includeDicts/tracer_fieldMaps"
+		}        
+
+        system {
+            fvSchemes {
+                ddtSchemes {
+                    //default steadyState;
+					default smartBounded fixed Euler constant 10.0;
+					ddt(rho,Tr_05) smartBounded fixed Euler constant 20.0;
+                }
+                
+                divSchemes {           
+                    div(phi,U) bounded Gauss linearUpwindV grad(U);                
+                    div(phi,k) bounded Gauss linearUpwind turbulence;
+                    div(phi,epsilon) bounded Gauss linearUpwind turbulence;
+                    //div(phi,k) bounded Gauss deferred vanLeer;
+                    //div(phi,epsilon) bounded Gauss deferred vanLeer;
+                    
+                    #include "$FOAM_CASE/system/includeDicts/tracer_fvSchemes"
+                }
+            }
+            
+            fvSolution {
+                solvers {
+                    "(Up|UpFinal)" {
+                        solver          AMG;
+                        cycle           W-cycle;
+                        coarseningType  Clustering;
+                        clusteringMethod Raithby;
+                        smoother        ILU;
+                        residualOutput  RMS;
+                        convergenceCriteria component;
+                        component       3;
+                        relTol          0.1;
+                        tolerance       1e-16;
+                        minIter         2;
+                        maxIter         3;
+                        scale           true; 
+                    }
+                    
+                    #include "$FOAM_CASE/system/includeDicts/tracer_fvSolution_solvers"
+                }
+
+				relaxationFactors {
+                    fields {
+                        rho 1;
+                        phi 1;
+                        //phi table ((0 0.8) (50 0.8) (51 0.9) (100 0.9) (101 1)); 
+                    }
+					equations {
+                        k               0.95;
+                        epsilon         0.95;
+						#include "$FOAM_CASE/system/includeDicts/tracers_relax_factors"
+					}
+				}
+            }
+            
+            fvOptions {
+                flowSolver {
+                    type singlePhaseCoupledPressureVelocity;
+                    timeMode pseudoTime;
+                    timeEnd 1000;
+                    localRelax true;                                                           
+                    localRelaxCoeffs { 
+                        relaxType Courant;
+						minCourant 0.1;
+                        maxCourant 2000;
+                        minCourantRelax table ( ( 0 0.99 ) ( 10000 0.99 ) );
+                        maxCourantRelax table ( ( 0 0.9 ) ( 10000 0.9 ) );
+                    }
+                }
+                
+                turbulenceSolver {
+                    type turbulenceSolver;
+                    timeEnd 1000;
+                } 
+                
+                velocityLimiter {
+                    type velocityLimiterSource;
+                    active true;
+                    velocityLimiterSourceCoeffs {
+						Ulimit 150.0;
+						selectionMode all;
+						velocityDamp false;
+						velocityClip true;
+						verbose true;
+					}
+                }
+                
+                //Solvers hookups
+                // trick so set a large startTime so it is not solving, will change it later when solving only for the scalars 
+                #include "$FOAM_CASE/system/includeDicts/tracer_solversHooks"
+
+                //Sources			
+                #include "$FOAM_CASE/system/includeDicts/tracer_volSources"
+            }
+		}
+
+		fields {
+			U      {initialisation{type fixedValue; value uniform (1 0 0);}}
+			p      {initialisation{type fixedValue; value uniform 0;}}
+			k      {initialisation{type Prandtl;}}
+			epsilon{initialisation{type Prandtl;}}
+			nut    {initialisation{type default;}}
+
+            #include "$FOAM_CASE/system/includeDicts/tracer_fixedValue_BCs"
+		}
+
+		boundaryConditions {
+            terrain{nut{type nutkAtmRoughWallFunction;z0 0.03;value uniform 0.001;}}
+            terrain_bld{nut{type nutkAtmRoughWallFunction;z0 0.03;value uniform 0.001;}}
+
+			inlet {
+				// p 		{type zeroGradient; }
+                // U       {type interpolatedInletOutlet; value uniform (1 0 0); phi phi; data (); outOfBounds clamp; distanceType wallDistance; fileName "$FOAM_CASE/vs.txt";}
+				// k       {type interpolatedFixedValue; value uniform 0.01; data (); outOfBounds clamp; distanceType wallDistance; fileName "$FOAM_CASE/k.txt";}
+				// epsilon {type interpolatedFixedValue; value uniform 0.01; data (); outOfBounds clamp; distanceType wallDistance; fileName "$FOAM_CASE/eps.txt";}
+
+                U {
+                    type windProfileDirectionVelocity;
+                    value uniform (1 0 0);
+                    profile RHWindProfile;
+                    outOfBounds clamp;
+					distanceType wallDistance;
+                    profileCoeffs { Cmu 0.09; Kappa 0.41; Uref 4.0; Href 10.0; z0 0.03; }
+                    normalDirection true;
+                    windDirection constant 270.0;
+                }
+                k {
+                    type interpolatedFixedValue;
+                    value uniform 0.01;
+                    profile RHWindKineticEnergyProfile;
+                    outOfBounds clamp;
+					distanceType wallDistance;
+                    profileCoeffs { Cmu 0.09; Kappa 0.41; Uref 4.0; Href 10.0; z0 0.03; }
+                }
+                epsilon {
+                    type interpolatedFixedValue;
+                    value uniform 0.01;
+                    profile RHWindDissipationRateProfile;
+                    outOfBounds clamp;
+					distanceType wallDistance;
+                    profileCoeffs { Cmu 0.09; Kappa 0.41; Uref 4.0; Href 10.0; z0 0.03; }
+                }
+
+                #include "$FOAM_CASE/system/includeDicts/tracer_fixedValue_BCs"
+
+			}
+
+			outlet {
+				U           { type inletOutlet; inletValue uniform (0 0 0); value uniform (1 0 0); }
+				p           { type fixedValue; value uniform 0; }
+				k           { type turbulentIntensityKineticEnergyInlet; intensity 0.05; value uniform 0.1; }
+				epsilon     { type turbulentMixingLengthDissipationRateInlet; mixingLength 0.01; value uniform 0.01; }
+                nut         {type zeroGradient;}
+                #include "$FOAM_CASE/system/includeDicts/tracer_inletOutlet_BCs"
+			}
+		}
+	}
+}

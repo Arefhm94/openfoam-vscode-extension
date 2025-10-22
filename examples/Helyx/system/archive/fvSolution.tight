@@ -1,0 +1,93 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | OpenFOAM (Engys Edition):                                |
+|   o   O   o      | Version: 2.2_engysEdition-2.5                            |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "../system";
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+SIMPLE { nNonOrthogonalCorrectors 0; pRefCell 0; pRefValue 0; }
+
+solvers
+{
+    p {
+        solver              GAMG;
+        agglomerator        faceAreaPair;
+        mergeLevels         1;
+        cacheAgglomeration  true;
+        nCellsInCoarsestLevel 200;
+        tolerance           1e-07;
+        relTol              0.01;
+        smoother            GaussSeidel;
+        nPreSweeps          0;
+        nPostSweeps         2;
+        nFinestSweeps       2;
+        minIter             1;
+    }
+
+    p_rgh {
+        solver              GAMG;
+        agglomerator        faceAreaPair;
+        mergeLevels         1;
+        cacheAgglomeration  true;
+        nCellsInCoarsestLevel 200;
+        tolerance           1e-07;
+        relTol              0.01;
+        smoother            GaussSeidel;
+        nPreSweeps          0;
+        nPostSweeps         2;
+        nFinestSweeps       2;
+        minIter             1;
+    }
+    
+    U       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    k       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    kl      { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    kt      { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    epsilon { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    R       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    nuTilda { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    omega   { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    h       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    T       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    v2      { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;nSweeps 1;}
+    f       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;nSweeps 1;}
+    q       { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;nSweeps 1;}
+    zeta    { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;nSweeps 1;}
+    smoke   { solver smoothSolver;smoother       GaussSeidel;tolerance 1e-06;relTol 0.1;minIter 1;}
+    rho     { solver PCG         ;preconditioner DIC        ;tolerance 0    ;relTol 0  ;minIter 1;}
+}
+
+relaxationFactors
+{
+    fields { p 0.3; p_rgh 0.3; rho 0.05; }
+    equations
+    {
+        U       0.7;
+        h       0.5;
+        T       0.9;
+        k       0.7;
+        epsilon 0.7;
+        R       0.7;
+        nuTilda 0.7;
+        omega   0.7;
+        kl      0.7;
+        kt      0.7;
+        v2      0.2;
+        f       0.4;
+        q       0.7;
+        zeta    0.7;
+        smoke   0.9;
+    }
+}
+
+// ************************************************************************* //

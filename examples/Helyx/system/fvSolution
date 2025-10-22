@@ -1,0 +1,91 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o        |                                                            |
+|    o     o     |  HELYX (R) : Open-source CFD for Enterprise                |
+|   o   O   o    |  Version : 4.3.1                                           |
+|    o     o     |  ENGYS Ltd. <http://engys.com/>                            |
+|       o        |                                                            |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      binary;
+    class       dictionary;
+    arch        "LSB;label=32;scalar=64";
+    object      fvSolution;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+solvers
+{
+    k
+    {
+        solver          smoothSolver;
+        smoother        symGaussSeidel;
+        minIter         1;
+        tolerance       1e-12;
+        relTol          0.001;
+        maxIter         20;
+    }
+    epsilon
+    {
+        solver          smoothSolver;
+        smoother        symGaussSeidel;
+        minIter         1;
+        tolerance       1e-12;
+        relTol          0.001;
+        maxIter         20;
+    }
+    "(Up|UpFinal)"
+    {
+        solver          AMG;
+        cycle           W-cycle;
+        coarseningType  Clustering;
+        clusteringMethod Raithby;
+        smoother        ILU;
+        residualOutput  RMS;
+        convergenceCriteria component;
+        component       3;
+        relTol          0.1;
+        tolerance       1e-16;
+        minIter         2;
+        maxIter         3;
+        scale           true;
+    }
+    Tr_05
+    {
+        solver          smoothSolver;
+        smoother        symGaussSeidel;
+        minIter         2;
+        tolerance       1e-12;
+        relTol          0.01;
+    }
+}
+
+relaxationFactors
+{
+    fields
+    {
+        rho             1;
+        phi             1;
+    }
+    equations
+    {
+        k               0.95;
+        epsilon         0.95;
+        Tr_05           0.99;
+    }
+}
+
+blockSolver
+{
+    pRefCell        0;
+    pRefValue       0;
+}
+
+cache
+{
+    grad(U)         ;
+}
+
+
+// ************************************************************************* //

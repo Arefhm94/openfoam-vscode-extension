@@ -1,0 +1,87 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o        |                                                            |
+|    o     o     |  HELYX (R) : Open-source CFD for Enterprise                |
+|   o   O   o    |  Version : 4.3.1                                           |
+|    o     o     |  ENGYS Ltd. <http://engys.com/>                            |
+|       o        |                                                            |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      binary;
+    class       dictionary;
+    arch        "LSB;label=32;scalar=64";
+    object      fvOptions;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+flowSolver
+{
+    type            singlePhaseCoupledPressureVelocity;
+    timeMode        pseudoTime;
+    timeEnd         1000;
+    localRelax      true;
+    localRelaxCoeffs
+    {
+        relaxType       Courant;
+        minCourant      0.1;
+        maxCourant      2000;
+        minCourantRelax table ( ( 0 0.99 ) ( 10000 0.99 ) );
+        maxCourantRelax table ( ( 0 0.9 ) ( 10000 0.9 ) );
+    }
+}
+
+turbulenceSolver
+{
+    type            turbulenceSolver;
+    timeEnd         1000;
+}
+
+velocityLimiter
+{
+    type            velocityLimiterSource;
+    active          true;
+    velocityLimiterSourceCoeffs
+    {
+        Ulimit          150;
+        selectionMode   all;
+        velocityDamp    false;
+        velocityClip    true;
+        verbose         true;
+    }
+}
+
+YTr_05
+{
+    active          true;
+    type            concentrationTransport;
+    hookOp          solve;
+    fieldName       Tr_05;
+    timeStart       450;
+    solverOptions
+    {
+    }
+}
+
+ID_01_source
+{
+    type            scalarTimeDependentSemiImplicitSource;
+    active          true;
+    scalarTimeDependentSemiImplicitSourceCoeffs
+    {
+        selectionMode   cellZone;
+        cellZone        ID_01_zone;
+        volumeMode      specific;
+        injectionRateSu
+        {
+            Tr_05           constant 0.00117647059;
+        }
+        injectionRateSp
+        {
+            Tr_05           constant 0;
+        }
+    }
+}
+
+
+// ************************************************************************* //

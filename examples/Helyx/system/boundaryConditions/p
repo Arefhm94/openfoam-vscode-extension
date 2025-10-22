@@ -1,0 +1,70 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o        |                                                            |
+|    o     o     |  HELYX (R) : Open-source CFD for Enterprise                |
+|   o   O   o    |  Version : 4.3.1                                           |
+|    o     o     |  ENGYS Ltd. <http://engys.com/>                            |
+|       o        |                                                            |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      binary;
+    class       dictionary;
+    arch        "LSB;label=32;scalar=64";
+    object      p;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+left
+{
+    type            symmetryPlane;
+}
+
+right
+{
+    type            symmetryPlane;
+}
+
+inlet
+{
+    type            fixedFluxPressure;
+    value           uniform 0;
+}
+
+top
+{
+    type            symmetryPlane;
+}
+
+offsite_bld
+{
+    type            fixedFluxPressure;
+    value           uniform 0;
+}
+
+onsite_bld
+{
+    type            fixedFluxPressure;
+    value           uniform 0;
+}
+
+terrain
+{
+    type            fixedFluxPressure;
+    value           uniform 0;
+}
+
+terrain_bld
+{
+    type            fixedFluxPressure;
+    value           uniform 0;
+}
+
+outlet
+{
+    type            fixedValue;
+    value           uniform 0;
+}
+
+
+// ************************************************************************* //

@@ -1,0 +1,25 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX                                                  |
+|   o   O   o      | Version: v2.3.0                                           |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    location system;
+    object mapFieldsDict;
+}
+
+cuttingPatches();
+// sourceCase
+parallelSource true;
+sourceTimeOption latestTime;
+sourceTimeValue 3500;
+targetTimeOption targetTimeValue;
+targetTimeValue 0;
+consistent false;
+patchMap ();

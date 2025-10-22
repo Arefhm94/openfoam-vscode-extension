@@ -1,0 +1,40 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  4.3.1                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      surfaceFeatureExtractDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+intersection_01 {
+    fileName    		onsite_bld.stl;
+	intersectionMethod 	surface;
+	eMeshName			onsite_bld_intersect;
+	surfaceCoeffs
+	{
+		name	terrain_bld.stl;
+		type	triSurfaceMesh;
+	}
+	writeVTKfalse;
+}
+
+intersection_02 {
+    fileName    		offsite_bld.stl;
+	intersectionMethod 	surface;
+	eMeshName			offsite_bld_intersect;
+	surfaceCoeffs
+	{
+		name	terrain_bld.stl;
+		type	triSurfaceMesh;
+	}
+	writeVTKfalse;
+}

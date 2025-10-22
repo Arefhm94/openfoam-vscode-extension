@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | OpenFOAM (Engys Edition):                                |
+|   o   O   o      | Version: 2.2_engysEdition-2.5                            |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "../system";
+    object      fvOptions;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+Ulimiter {
+    type            velocityLimiterSource;
+    active          yes;
+    selectionMode   all;
+    velocityLimiterSourceCoeffs {
+        Ulimit          100;
+        limitMode       diagonal;
+        diagonalMultiplier 1;
+        UlimitRange     1;
+        alpha           1000;
+        deltaRelax      0.9;
+        velocityClip    true;
+        verbose         true;
+    }
+}
+
+
+// ************************************************************************* //

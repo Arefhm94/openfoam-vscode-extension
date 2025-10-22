@@ -1,0 +1,9 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX(R) Core: Open-source CFD for Enterprise            |
+|   o   O   o      | Version: dev                                             |
+|    o     o       | ENGYS Ltd. <http://engys.com/>                           |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+ID_01_source {type scalarTimeDependentSemiImplicitSource;active true;scalarTimeDependentSemiImplicitSourceCoeffs{selectionMode cellZone;cellZone ID_01_zone;volumeMode specific;injectionRateSu{Tr_05 constant 1.17647059e-03;} injectionRateSp{Tr_05 constant 0.0;}}}

@@ -1,0 +1,11 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX(R) Core: Open-source CFD for Enterprise            |
+|   o   O   o      | Version: dev                                             |
+|    o     o       | ENGYS Ltd. <http://engys.com/>                           |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+YTr_05{active true;type concentrationTransport;hookOp solve;fieldName Tr_05;timeStart 450;solverOptions {}}
+
+// ************************************************************************* //

@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | OpenFOAM (Engys Edition):                                |
+|   o   O   o      | Version: 2.2_engysEdition-2.5                            |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "../constant";
+    object      RASProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+RASModel        realizableKE;
+
+turbulence      on;
+
+printCoeffs     on;
+
+realizableKECoeffs
+{
+    fieldMaps
+    {
+        k               k;
+        epsilon         epsilon;
+        nut             nut;
+    }
+}
+
+
+// ************************************************************************* //

@@ -1,0 +1,39 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | OpenFOAM (Engys Edition):                                |
+|   o   O   o      | Version: 2.2_engysEdition-2.5                            |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "../constant";
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+Dsmoke          Dsmoke [ 0 2 -1 0 0 0 0 ] 2.4e-05;
+
+Sctsmoke        Sctsmoke [ 0 0 0 0 0 0 0 ] 0.7;
+
+transportModel  Newtonian;
+
+NewtonianCoeffs
+{
+}
+
+rho             rho [ 1 -3 0 0 0 0 0 ] 0.85;
+
+nu              nu [ 0 2 -1 0 0 0 0 ] 1.95412e-05;
+
+Cp              Cp [ 0 2 -2 -1 0 0 0 ] 1006;
+
+Prt             Prt [ 0 0 0 0 0 0 0 ] 0.85;
+
+lambda          lambda [ 1 1 -3 -1 0 0 0 ] 0.024;
+
+
+// ************************************************************************* //

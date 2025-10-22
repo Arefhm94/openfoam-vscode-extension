@@ -1,0 +1,64 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o        |                                                            |
+|    o     o     |  HELYX (R) : Open-source CFD for Enterprise                |
+|   o   O   o    |  Version : 4.3.1                                           |
+|    o     o     |  ENGYS Ltd. <http://engys.com/>                            |
+|       o        |                                                            |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      binary;
+    class       polyBoundaryMesh;
+    arch        "LSB;label=32;scalar=64";
+    object      boundary;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+6
+(
+    ffminx
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          100;
+        startFace       2700;
+    }
+    ffmaxx
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          100;
+        startFace       2800;
+    }
+    ffminy
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          100;
+        startFace       2900;
+    }
+    ffmaxy
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          100;
+        startFace       3000;
+    }
+    ffminz
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          100;
+        startFace       3100;
+    }
+    ffmaxz
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          100;
+        startFace       3200;
+    }
+)
+
+// ************************************************************************* //

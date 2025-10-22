@@ -1,0 +1,247 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX                                                    |
+|   o   O   o      | Version: v4.3.1                                          |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+
+FoamFile {
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      helyxHexMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+castellatedMesh      true;
+snap                 true;
+addLayers            true;
+autoBlockMesh        true;
+blockData            (32.0 0);
+crackDetection       true;
+crackTol             0.05;
+allowTopoChanges     true;
+finalDecomposition   ptscotch;
+meshMode             quality;
+
+geometry {
+    // refinement boxes
+    _ref01.stl      { type triSurfaceMesh;name _ref01     ;appendRegionName false;}
+    _ref02.stl      { type triSurfaceMesh;name _ref02     ;appendRegionName false;}
+    _ref03.stl      { type triSurfaceMesh;name _ref03     ;appendRegionName false;}
+    _refSphere.stl  { type triSurfaceMesh;name _refSphere ;appendRegionName false;}
+    // bbox
+    left.stl        { type triSurfaceMesh;name left       ;appendRegionName false;}
+    right.stl       { type triSurfaceMesh;name right      ;appendRegionName false;}
+    inlet.stl       { type triSurfaceMesh;name inlet      ;appendRegionName false;}
+    outlet.stl      { type triSurfaceMesh;name outlet     ;appendRegionName false;}
+    top.stl         { type triSurfaceMesh;name top        ;appendRegionName false;}
+    // detailed
+    offsite_bld.stl { type triSurfaceMesh;name offsite_bld;appendRegionName false;}
+    onsite_bld.stl  { type triSurfaceMesh;name onsite_bld ;appendRegionName false;}    
+    source_area.stl { type triSurfaceMesh;name source_area;appendRegionName false;}
+    terrain.stl     { type triSurfaceMesh;name terrain    ;appendRegionName false;}
+    terrain_bld.stl { type triSurfaceMesh;name terrain_bld;appendRegionName false;}
+}
+
+castellatedMeshControls {
+    features (
+        { file "offsite_bld.eMesh";           levels ((0.0 7)); refineFeatureEdgesOnly false; }
+        { file "onsite_bld.eMesh";            levels ((0.0 7)); refineFeatureEdgesOnly false; }
+        { file "onsite_bld_intersect.eMesh";  levels ((0.0 7)); refineFeatureEdgesOnly false; }
+        { file "offsite_bld_intersect.eMesh"; levels ((0.0 7)); refineFeatureEdgesOnly false; }
+    );
+
+    refinementSurfaces {
+        // bbox
+        left        { level (0 0); }
+        right       { level (0 0); }
+        inlet       { level (0 0); }
+        outlet      { level (0 0); }
+        top         { level (0 0); }
+        // detailed
+        "terrain.*" { level (2 2); }
+        offsite_bld { level (7 7); proximityIncrement 1; maxCellsAcrossGap 4; }
+        onsite_bld  { level (6 6); proximityIncrement 1; maxCellsAcrossGap 4; }        
+    }
+
+    refinementRegions {
+        // refinement boxes
+        _ref01      { mode inside;   levels ((1E15 2)); }
+        _ref02      { mode inside;   levels ((1E15 3)); }
+        _ref03      { mode inside;   levels ((1E15 4)); }
+        _refSphere  { mode inside;   levels ((1E15 8)); }
+        // surfaces
+        offsite_bld { mode distance; levels ((12.0 6) (36.0 5)); }
+        onsite_bld  { mode distance; levels ((12.0 6) (36.0 5)); }
+        source_area { mode inside;   levels ((1E15 5)); }
+        "terrain.*" { mode distance; levels ((32.0 2) (64.0 1)); }
+    }
+
+    maxLocalCells              250000000;
+    maxGlobalCells             250000000;
+    minRefinementCells         100;
+    maxLoadUnbalance           0.1;
+    nCellsBetweenLevels        4;
+    resolveFeatureAngle        -60.0;
+    featureRefineAngle         20.0;
+    refineSurfaceBoundary      false;
+    minBaffleAngle             -60.0;
+    allowFreeStandingZoneFaces false;
+    balanceThenRefine          true;
+    nGapRefinements            0;
+    minZoneRegionSize          1;
+    additionalInsideCheck      false;
+    moveCentroidsTol           -1.0;
+    interfaceRefine            true;
+    splitCells                 false;
+    singleCellGapClosure       false;
+
+    wrapper {
+        wrap        false;
+        volSources  true;
+        volDistance 1.0;
+        meshInMM    false;
+        maxIter     200;
+        writeFields false;
+        invert      false;
+        sigma       3.0;
+        cutoff      1000.0;
+    }
+
+    locationsInMesh (( (0.0 0.0 200.0) none ));
+    locationsOutsideMesh ( ( 0.0 0.0 -100.0 ) );
+}
+
+snapControls {
+    featureEdges            {}
+    nOuterIter              1;
+    nPreFeatureIter         0;
+    nSolveIter              10;
+    nFeatureIter            60;
+    globalFeatureEdges      true;
+    globalRegionSnap        false;
+    nSmoothPatch            2;
+    tolerance               4.0;
+    nRelaxIter              5;
+    zoneFeatureSnapping     true;
+    directFeatureSnapping   true;
+    geometryFeatureLines    true;
+    snapSurfBoundary        true;
+    collapseTol             0.25;
+    enlargeStencil          true;
+    smoothSnappedSurface    true;
+    featureSnapChecks       true;
+    concaveTol              0.3;
+    nSliverSmooths          10;
+    mergeBoundaryFaces      true;
+    averageSurfaceNormal    true;
+    repatchOverlapping      false;
+    acuteReflexSnapAngle    25.0;
+    minAcuteReflexSnapAngle 8.0;
+}
+
+addLayersControls {
+    layers {
+        // bbox patches
+        left        { nSurfaceLayers 0; grownUp true; }
+        right       { nSurfaceLayers 0; grownUp true; }
+        inlet       { nSurfaceLayers 0; grownUp true; }
+        outlet      { nSurfaceLayers 0; grownUp true; }
+        
+        // detailed patches
+        top         { nSurfaceLayers 0; expansionRatio 1.25; finalLayerThickness 0.4; grownUp automatic; }
+        offsite_bld { nSurfaceLayers 4; expansionRatio 1.25; finalLayerThickness 0.4; grownUp automatic; }
+        onsite_bld  { nSurfaceLayers 4; expansionRatio 1.25; finalLayerThickness 0.4; grownUp automatic; }
+        terrain     { nSurfaceLayers 4; expansionRatio 1.25; firstLayerThickness 0.6; grownUp automatic; }
+        terrain_bld { nSurfaceLayers 4; expansionRatio 1.25; finalLayerThickness 0.4; grownUp automatic; }
+
+    }
+
+    relativeSizes             true;
+    expansionRatio            1.25;
+    finalLayerThickness       0.4;
+    minThickness              0.2;
+    featureAngleMerge         45;
+    featureAngleTerminate     80.0;
+    nRelaxIter                5;
+    maxFaceThicknessRatio     2.0;
+    maxThicknessToMedialRatio 0.3;
+    minMedialAxisAngle        90;
+    maxLayerIter              30;
+    growConvexEdge            true;
+    growConcaveEdge           true;
+    growUpPatches             true;
+    rebalance                 false;
+    layerRecovery             1;
+    nSmoothThickness          10;
+    nSmoothSurfaceNormals     6;
+    nSmoothNormals            3;
+    writeVTK                  true;
+    maxProjectionDistance     10000.0;
+    maxCellDistortion         50.0;
+    medialRatioExp            1;
+    growZoneLayers            false;
+    dualConcaveCollapse       0;
+    dualZoneLayersScaling     1.0;
+    dualLayerInterfaceWeights 0.5;
+    dualMaxOrtho              180;
+    dualReSnapZones           false;
+    extrudeBlend              false;
+}
+
+meshQualityControls {
+    maxNonOrtho             70.0;
+    maxBoundarySkewness     20;
+    maxInternalSkewness     6;
+    maxConcave              80.0;
+    minFlatness             0.5;
+    minVol                  1.0E-14;
+    minTetQuality           -1.0E30;
+    minArea                 1.0E-13;
+    minTwist                0.05;
+    minDeterminant          1.0E-4;
+    minFaceWeight           0.08;
+    minVolRatio             0.02;
+    minTriangleTwist        -0.99;
+    errorReduction          0.75;
+    nSmoothScale            10;
+    minVolCollapseRatio     -1.0;
+    faceFaceCells           false;
+    minSnapRelativeVolume   -1;
+    smoothAlignedEdges      false;
+    minSnapRelativeTetVolume -1;
+    maxGaussGreenCentroid   -1;
+    nVolSmoothIter          8;
+    maxCellAspectRatio      -1.0;
+    maxFaceCentreNonOrtho   180.0;
+    minEdgeLength           -1.0;
+}
+
+meshOptimization {
+    type cfMeshOptimize;
+    cfMeshOptimizeCoeffs {
+        qualityThreshold        0.0;
+        numLaplaceIterations    0;
+        maxNumGlobalIterations  10;
+        maxNumIterations        50;
+        maxNumSurfaceIterations 2;
+        relaxedCheck            false;
+        finalRelaxedCheck       true;
+        checkWarped             false;
+    }
+}
+
+cellRemoval {
+    checks      ();
+    patch       oldInternalFaces;
+    removeCells true;
+    writeVTK    true;
+}
+
+debug             0;
+mergeTolerance    1.0E-6;
+meshAlgorithm     standard;
+

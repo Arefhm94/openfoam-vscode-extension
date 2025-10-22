@@ -1,0 +1,27 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX(R): Open-source CFD for Enterprise                 |
+|   o   O   o      | Version: 4.3.1                                           |
+|    o     o       | ENGYS Ltd. <http://engys.com/>                           |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+
+FoamFile {
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "../system";
+    object      fields;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+
+U       {initialisation {type fixedValue; value uniform (0 -1 0);  }}
+p       {initialisation {type fixedValue; value uniform 0;         }}
+k       {initialisation {type turbulentIL; I 0.05; L 0.01; Uref 1; }}
+epsilon {initialisation {type turbulentIL; I 0.05; L 0.01; Uref 1; }}
+T       {initialisation {type boundaryValue; patch inlet;          }}
+CO2     {initialisation {type fixedValue; value uniform 0;         }}
+smoke   {initialisation {type fixedValue; value uniform 0;         }}
+
+// ************************************************************************* //

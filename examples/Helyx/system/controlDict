@@ -1,0 +1,195 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o        |                                                            |
+|    o     o     |  HELYX (R) : Open-source CFD for Enterprise                |
+|   o   O   o    |  Version : 4.3.1                                           |
+|    o     o     |  ENGYS Ltd. <http://engys.com/>                            |
+|       o        |                                                            |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      binary;
+    class       dictionary;
+    arch        "LSB;label=32;scalar=64";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+startFrom       latestTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         1000;
+
+deltaT          1;
+
+writeControl    timeStep;
+
+writeInterval   100;
+
+purgeWrite      1;
+
+writeFormat     binary;
+
+writePrecision  10;
+
+writeCompression uncompressed;
+
+timeFormat      general;
+
+timePrecision   6;
+
+graphFormat     raw;
+
+runTimeModifiable true;
+
+libs            1 ( "libHelyxCoupled.so" );
+
+application     helyxSolve;
+
+functions
+{
+    VR1
+    {
+        functionObjectLibs ( "libreport.so" );
+        logToFile       yes;
+        fields          ( U p Tr_05 );
+        executeControl  timeStep;
+        type            volumeReport;
+        regions         ( region0 );
+        writeControl    writeTime;
+        writeInterval   1;
+    }
+    VR_Source
+    {
+        functionObjectLibs ( "libreport.so" );
+        logToFile       yes;
+        fields          ( U p Tr_05 );
+        executeControl  timeStep;
+        type            volumeReport;
+        regions         ( region0 );
+        sets            
+        (
+            cellToCell
+            {
+                set             ID_01_set;
+            }
+
+        )
+;
+        writeControl    writeTime;
+        writeInterval   1;
+    }
+    probes
+    {
+        functionObjectLibs ( "libsampling.so" );
+        enabled         true;
+        probeLocations  ( ( 507.49 35.85 51.61 ) );
+        fields          ( U p Tr_05 );
+        executeControl  timeStep;
+        libs            ( "libsampling.so" );
+        type            probes;
+        name            probes;
+        writeControl    writeTime;
+        writeInterval   1;
+    }
+    sampled_surfaces
+    {
+        functionObjectLibs ( "libsampling.so" );
+        fields          ( U p Tr_05 );
+        interpolationScheme cellPoint;
+        surfaceFormat   vtk;
+        surfaces        
+        (
+            sample_surface
+            {
+                type            patch;
+                patches         ( "terrain.*" onsite_bld offsite_bld );
+                interpolate     false;
+                maxEdgeLengthSearch true;
+            }
+
+        )
+;
+        writeControl    onEnd;
+        region          region0;
+        type            surfaces;
+        writeInterval   1;
+        executeControl  onEnd;
+        executeInterval 1;
+    }
+    vertical_profile_middle
+    {
+        type            sets;
+        functionObjectLibs ( "libsampling.so" );
+        regions         ( region0 );
+        fields          ( U k p Tr_05 );
+        interpolationScheme cellPoint;
+        setFormat       csv;
+        sets            
+        (
+            line_sensor_01
+            {
+                type            uniform;
+                axis            xyz;
+                nPoints         41;
+                start           ( 507.05 35.539 49.905 );
+                end             ( 507.05 35.539 51.905 );
+            }
+
+            line_sensor_02
+            {
+                type            uniform;
+                axis            xyz;
+                nPoints         41;
+                start           ( 508.7 31.403 49.905 );
+                end             ( 508.7 31.403 51.905 );
+            }
+
+            vertical_line_center
+            {
+                type            uniform;
+                axis            xyz;
+                nPoints         100;
+                start           ( 0 1250 0 );
+                end             ( 0 1250 300 );
+            }
+
+        )
+;
+        writeControl    onEnd;
+        writeInterval   1;
+        executeControl  onEnd;
+        executeInterval 1;
+    }
+    sampled_isos
+    {
+        functionObjectLibs ( "libsampling.so" );
+        fields          ( U p Tr_05 );
+        interpolationScheme cellPoint;
+        surfaceFormat   vtk;
+        surfaces        
+        (
+            iso_Tr_05
+            {
+                type            isoSurface;
+                isoField        Tr_05;
+                isoValue        0.001;
+                interpolate     true;
+            }
+
+        )
+;
+        writeControl    onEnd;
+        region          region0;
+        type            surfaces;
+        writeInterval   1;
+        executeControl  onEnd;
+        executeInterval 1;
+    }
+}
+
+
+// ************************************************************************* //

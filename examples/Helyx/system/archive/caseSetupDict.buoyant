@@ -1,0 +1,412 @@
+FoamFile
+{
+    version         2.0;
+    format          ascii;
+    class           dictionary;
+    object          caseSetupDict;
+}
+
+regions (region0);
+
+region0
+{
+
+  modificationSwitches
+  {
+      resetInternalFields true;
+      resetBoundaryFields true;
+      resetSystemDicts true;
+      resetConstDicts true;
+      resetBoundaryMesh true;
+      deleteUnusedFields true;
+      reuseExistingDicts false;
+      strictPatchNameChecking false;
+  }
+  
+  boundaryMesh
+  {
+      partialNamed{}
+      
+      exactNamed
+      {
+          right{type symmetryPlane;}
+          left{type symmetryPlane;}
+		  top{type symmetryPlane;}
+		  
+          inlet{type inlet;}
+          outlet{type outlet;}
+		  
+		  inlet_chimney{type inlet;}
+      }
+      
+  }
+  
+  global
+  {
+	state (SIMPLE incompressible ras buoyant smoke CO2);
+	turbulenceModel realizableKE;
+	materials (air);
+	materialProperties      
+	{
+		air
+		{
+			transportModel Newtonian;
+			NewtonianCoeffs{}
+			rho rho [1 -3 0 0 0 0 0 ] 0.85;
+			mu mu [1 -1 -1 0 0 0 0 ] 1.661002E-5;
+			nu nu [0 2 -1 0 0 0 0 ] 1.9541200000000002E-5;
+			Cp Cp [0 2 -2 -1 0 0 0 ] 1006.0;
+			Prt Prt [0 0 0 0 0 0 0 ] 0.85;
+			lambda lambda [1 1 -3 -1 0 0 0 ] 0.024;
+			pRef pRef [1 -1 -2 0 0 0 0 ] 101325.0;
+			TRef TRef [0 0 0 1 0 0 0 ] 287.15;
+			Beta Beta [0 0 0 -1 0 0 0 ] 0.00333;
+			Pr Pr [0 0 0 0 0 0 0 ] 0.0;
+		}
+	}
+	
+	constant
+	{
+		g
+		{
+			dimensions [0 1 -2 0 0 0 0];
+			value (0.0 0.0 -9.81);
+		} 
+	}
+
+
+  
+      system 
+      {	
+          fvSolution
+          {
+			/*SIMPLE
+			{
+			momentumSolutionInterval 5;
+			}*/
+		
+			relaxationFactors
+			{
+			  fields
+			  {
+				  p               0.3;
+				  p_rgh           0.3;
+			  }
+			  equations
+			  {
+				  U               0.7;
+				  k               0.7;
+				  epsilon         0.7;
+				  T      		  0.9;
+				  smoke           0.9;
+				  CO2			  0.9;
+			  }
+			}
+          }
+  
+          fvOptions 
+		  {
+               Ulimiter
+                {
+                    type            velocityLimiterSource;
+                    active          yes;
+                    selectionMode   all;
+                    velocityLimiterSourceCoeffs
+                    {
+                        Ulimit          100;
+                        limitMode       diagonal;
+                        diagonalMultiplier 1;
+                        UlimitRange     1;
+                        alpha           1000;
+                        deltaRelax      0.9;
+                        velocityClip    true;
+                        verbose         true;
+                    }
+                }
+				
+            }
+          
+        controlDict
+        {
+            writeInterval   500;
+            endTime         3000;
+            startFrom latestTime;
+            writeCompression compressed;
+            purgeWrite 1;
+        }
+      }
+  }
+  
+         fields
+         {
+			//U{initialisation{type potentialFlow;initialiseUBCs true;}}
+			//p_rgh{initialisation{type potentialFlow;}}
+			
+			U{initialisation{type fixedValue; value uniform (1 0 0);}}
+			p_rgh{initialisation{type fixedValue; value uniform 0;}}
+            
+			k{initialisation{type Prandtl;}}
+			epsilon{initialisation{type Prandtl;}}
+			nut{initialisation{type default;}}
+			
+			T{initialisation{type fixedValue;value uniform 281.65;}}
+			alphat{initialisation{type fixedValue;value uniform 0.0;}}
+			
+			smoke{initialisation{type fixedValue;value uniform 0;}}
+			Dtsmoke{initialisation{type fixedValue;value uniform 0;}}
+			
+			CO2{initialisation{type fixedValue;value uniform 0;}}
+			DtCO2{initialisation{type fixedValue;value uniform 0;}}
+         }
+  
+  
+  boundaryConditions
+  {
+  
+      regionDefaults
+      {
+          /*wall 
+          {
+              T{type zeroGradient;}
+			  nut{type nutkWallFunction;uniform value 0.001;}
+          }*/
+      }
+      
+      partialNamed{}
+  
+      exactNamed
+      {
+            terrain{nut{type nutkAtmRoughWallFunction;z0 uniform 0.03;value uniform 0.001;}}
+			
+            inlet
+             {
+              p_rgh {type zeroGradient;}
+          
+              U
+              {
+                  type interpolatedInletOutlet;
+                  value uniform (1 0 0);
+                  phi phi;
+                  data ();
+                  outOfBounds clamp;
+                  distanceType wallDistance;
+                  fileName "$FOAM_CASE/vs.txt";
+              }
+          
+              k
+              {
+                  type interpolatedFixedValue;
+                  value uniform 0.01;
+                  data ();
+                  outOfBounds clamp;
+                  distanceType wallDistance;
+                  fileName "$FOAM_CASE/k.txt";
+              }
+          
+              epsilon
+              {
+                  type interpolatedFixedValue;
+                  value uniform 0.01;
+                  data ();
+                  outOfBounds clamp;
+                  fileName "$FOAM_CASE/eps.txt";
+                  distanceType wallDistance;
+              }
+          
+              nut {type zeroGradient;}
+			  
+			  T { type inletOutlet; inletValue uniform  287.65; value uniform  287.65; }  
+			  alphat { type zeroGradient; }
+		  
+		      smoke { type inletOutlet; inletValue uniform 0; value uniform 0; }
+		      Dtsmoke {type zeroGradient;}
+			  
+			  CO2{ type inletOutlet; inletValue uniform 0; value uniform 0; }
+		      DtCO2 {type zeroGradient;}
+             }
+             
+             outlet
+             {
+                U{type inletOutlet;inletValue uniform ( 0 0 0 );value uniform ( 1 0 0);}
+                p_rgh{type fixedValue;value uniform 0;}
+                k{type turbulentIntensityKineticEnergyInlet;intensity 0.05;value uniform 0.1;}
+                epsilon{type turbulentMixingLengthDissipationRateInlet;mixingLength 0.01;value uniform 0.01;}
+                nut{type zeroGradient;}
+				
+				T { type inletOutlet; inletValue uniform 287.65; value uniform 287.65; }   // Backface temperature equal to TRef
+		        alphat { type zeroGradient; }
+		  
+		      smoke { type inletOutlet; inletValue uniform 0; value uniform 0; }
+		      Dtsmoke {type zeroGradient;}
+			  
+			  CO2 { type inletOutlet; inletValue uniform 0; value uniform 0; }
+		      DtCO2 {type zeroGradient;}		  
+            }      
+			
+            inlet_chimney
+            {
+			  //U { type flowRateOutletVelocity; value uniform ( 0.0 0.0 -20.0); volumetricFlowRate -10.82; uniform true;}
+			  U { type flowRateInletVelocity; value uniform ( 0.0 0.0 0.05); volumetricFlowRate 982.0; uniform true;}
+			  p_rgh { type zeroGradient;}
+			  
+			  k { type turbulentIntensityKineticEnergyInlet; intensity 0.05; value uniform 0.1; }
+			  epsilon { type turbulentMixingLengthFrequencyInlet; mixingLength 0.01; value uniform 0.01; }
+			  nut { type zeroGradient; }
+			  
+			  //T { type inletOutlet; inletValue uniform 243.15; value uniform 243.15; }    // Supplying target equalibrium temperature
+			  T {type fixedValue;value uniform 331.15}
+			  alphat { type zeroGradient; }
+			  
+		      //smoke { type inletOutlet; inletValue uniform 0.11; value uniform 0.11; }
+		      smoke {type fixedValue;value uniform 1.0;}
+  			  Dtsmoke {type zeroGradient;}
+			  
+			  CO2 {type fixedValue;value uniform 0.0;}
+  			  DtCO2 {type zeroGradient;}
+            }  			
+      }
+  
+  }
+  
+  functions
+  (
+	FA1
+	{
+	  functionObjectLibs ( "libfieldFunctionObjects.so" );
+	  fields
+	  (
+		  U{mean on;prime2Mean off;base iteration;}
+		  T{mean on;prime2Mean off;base iteration;}
+		  smoke{mean on;prime2Mean off;base iteration;}
+		  CO2{mean on;prime2Mean off;base iteration;}
+	  );
+	  outputControl      outputTime;
+	  region             region0;
+	  type               fieldAverage;
+	  averagingStartTime 2500;
+	}
+
+	vr1
+	{
+	  type volumeReport;
+	  fields (U T smoke CO2);
+	}
+	
+	flow_monitor
+	{
+		region          region0;
+		type            faceSource;
+		functionObjectLibs ( "libfieldFunctionObjects.so" );
+		enabled         true;
+		outputControl   timeStep;
+		outputInterval  1;
+		log             false;
+		valueOutput     false;
+		source          patch;
+		sourceName      inlet_chimney;
+		operation       sum;
+		fields          ( phi );
+	}
+
+	check_inlet
+	{
+		region          region0;
+		type            faceSource;
+		functionObjectLibs ( "libfieldFunctionObjects.so" );
+		enabled         true;
+		outputControl   timeStep;
+		outputInterval  1;
+		log             false;
+		valueOutput     false;
+		source          patch;
+		sourceName      inlet_chimney;
+		operation       areaAverage;
+		fields          ( U smoke T);
+	} 	
+	
+	sampled_surfaces
+	{
+		functionObjectLibs ( "libsampling.so" );
+		outputControl   timeStep;
+		fields          ( smoke CO2 );
+		interpolationScheme cellPoint;
+		surfaceFormat   vtk;
+		surfaces        
+	(
+		sample_surface
+		{
+			type            patch;
+			patches         ( "terrain.*" onsite_bld offsite_bld );
+			interpolate     false;
+		}
+
+	)
+	;
+		region          region0;
+		type            surfaces;
+		outputInterval  100;
+	}
+
+	sampled_isos
+	{
+		functionObjectLibs ( "libsampling.so" );
+		outputControl   timeStep;
+		fields          ( T );
+		interpolationScheme cellPoint;
+		surfaceFormat   vtk;
+		surfaces        
+	(
+		iso_smoke
+		{
+			type            isoSurface;
+			isoField        smoke;
+			isoValue        0.01;
+			interpolate     true;
+		}
+
+		iso_CO2
+		{
+			type            isoSurface;
+			isoField        CO2;
+			isoValue        0.01;
+			interpolate     true;
+		}
+
+	)
+	;
+		region          region0;
+		type            surfaces;
+		outputInterval  100;
+	}
+
+	probes
+	{
+		functionObjectLibs ( "libreport.so" );
+		probeLocations  ((507.00 36.06 51.87));
+		fields          ( smoke CO2 U);
+		region          region0;
+		type            volProbes;
+		outputControl   timeStep;
+		outputInterval  1;
+	}
+	
+   YCO2
+   {
+      fieldName       CO2;
+      solverOptions
+      {
+         ddtScheme       steadyState;
+      }
+         functionObjectLibs ( "libsolverFunctionObjects.so" );
+         region          region0;
+         type            concentrationTransport;
+   
+      regions
+      ( 
+         cellToCell { set areaSource_set; fixedValue 1.0; }		 
+      );
+   }	
+  );
+
+}
+include "$FOAM_CONFIG/caseSetupDict.defaults";

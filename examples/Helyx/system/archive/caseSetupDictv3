@@ -1,0 +1,632 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+|       o          |                                                          |
+|    o     o       | HELYX                                                    |
+|   o   O   o      | Version: v3.1.1                                          |
+|    o     o       | Web:     http://www.engys.com                            |
+|       o          |                                                          |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version 2.0;
+    format ascii;
+    class dictionary;
+    location system;
+    object caseSetupDict;
+}
+
+global {
+    modificationSwitches {
+        resetInternalFields     true;
+        resetBoundaryFields     true;
+        resetSystemDicts        true;
+        resetConstDicts         true;
+        resetBoundaryMesh       true;
+        deleteUnusedFields      true;
+        reuseExistingDicts      false;
+        strictPatchNameChecking false;
+    }
+    functions {
+        VR1 {
+            type volumeReport;
+            regions ( region0 );
+            fields ( U p CO2 T smoke);
+            writeControl timeStep;
+            writeInterval 1;
+            functionObjectLibs ("libreport.so" );
+        }
+
+        Flow_chimney {
+            type surfaceReport;
+            regions ( region0 );
+            fields ( U smoke );
+            writeControl timeStep;
+            writeInterval 1;
+            weighting flux;
+            fluxName phi;
+            homogeneity false;
+            surfaces
+            (
+                {
+                    type patch;
+                    name inlet_chimney;
+                }
+            );
+            constraints
+            (
+                {
+                    type boundBox;
+                    min ( -1000.0 -1000.0 -1000.0 );
+                    max ( 1000.0 1000.0 1000.0 );
+                    keepInside true;
+                }
+            );
+            functionObjectLibs ("libreport.so" );
+        }
+
+        probe {
+            functionObjectLibs ( "libsampling.so" );
+            enabled         true;
+            probeLocations
+            (
+                (454.60 227.34 51.87)
+            );
+            fields          ( smoke CO2 );
+            executeControl  timeStep;
+            libs            ( "libsampling.so" );
+            type            probes;
+            name            probes;
+            writeControl    writeTime;
+            writeInterval   1;
+        }
+    }
+}
+
+regions {
+    region0 {
+        state (SIMPLE incompressible ras buoyant CO2 smoke);
+        boundaryMesh
+        {
+            inlet           { type inlet; }
+            inlet_chimney   { type inlet; }
+            outlet          { type outlet; }
+            right           { type symmetry; }
+            left            { type symmetry; }
+            top             { type symmetry; }
+        }
+        turbulenceModel realizableKE;
+        materials (air);
+        materialProperties {
+            air {
+                materialName air;
+                transportModel Newtonian;
+                NewtonianCoeffs {}
+                rho [1 -3 0 0 0 0 0] 0.85;
+                mu [1 -1 -1 0 0 0 0] 1.661002E-5;
+                nu [0 2 -1 0 0 0 0] 1.9541200000000002E-5;
+                Cp [0 2 -2 -1 0 0 0] 1006.0;
+                Prt [0 0 0 0 0 0 0] 0.85;
+                lambda [1 1 -3 -1 0 0 0] 0.024;
+                pRef [1 -1 -2 0 0 0 0] 101325.0;
+                TRef [0 0 0 1 0 0 0] 287.15;
+                Beta [0 0 0 -1 0 0 0] 0.00333;
+            }
+        }
+
+        constant {
+            g {
+                dimensions [0  1 -2  0 0 0 0];
+                value ( 0.0 0.0 -9.81 );
+            }
+        }
+
+        system {
+            fvSchemes {
+                ddtSchemes {
+                    default steadyState;
+                }
+                gradSchemes {
+                    default cellLimited Gauss linear 1;
+                    turbulence cellLimited Gauss linear 1;
+                    gradU cellLimited Gauss linear 1.0;
+                    grad(p) taylorGauss linear;
+                    grad(p_rgh) taylorGauss linear;
+                    grad(k) cellLimited Gauss linear 1.0;
+                    grad(epsilon) cellLimited Gauss linear 1.0;
+                    gradT cellLimited Gauss linear 1.0;
+                    grad(CO2) cellLimited Gauss linear 1.0;
+                    grad(smoke) cellLimited Gauss linear 1.0;
+                }
+                divSchemes {
+                    div(phi,U) bounded Gauss linearUpwindV gradU;
+                    default none;
+                    div(R) Gauss linear;
+                    div(nonlinearStress) Gauss linear;
+                    div((muEff*dev2(grad(U).T()))) Gauss linear;
+                    div((nuEff*dev2(T(grad(U))))) Gauss linear;
+                    div(((rho*nuEff)*dev2(T(grad(U))))) Gauss linear;
+                    div((nu*dev2(T(grad(U))))) Gauss linear;
+                    div(phi,T) bounded Gauss linearUpwind gradT;
+                    div(phi,k) bounded Gauss linearUpwind turbulence;
+                    div(phi,epsilon) bounded Gauss linearUpwind turbulence;
+                    div(phi,CO2) bounded Gauss limitedLinear 1.000000;
+                    div(phi,smoke) bounded Gauss limitedLinear 1.000000;
+                }
+                laplacianSchemes {
+                    default Gauss linear limited 0.333;
+                    laplacian(DkEff,k) Gauss linear limited 0.333;
+                    laplacian(DepsilonEff,epsilon) Gauss linear limited 0.333;
+                }
+                interpolationSchemes {
+                    default linear;
+                    interpolate(HbyA) linear;
+                }
+                snGradSchemes {
+                    default limited 0.333;
+                }
+                wallDist {
+                    method meshWave;
+                }
+            }
+
+            fvSolution {
+                solvers {
+                    p {
+                        solver GAMG;
+                        agglomerator faceAreaPair;
+                        mergeLevels 1;
+                        cacheAgglomeration true;
+                        nCellsInCoarsestLevel 200;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        scaleCorrection true;
+                        tolerance 1e-06;
+                        relTol 0.0;
+                    }
+                    U {
+                        solver smoothSolver;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        tolerance 1e-06;
+                        relTol 0.0;
+                    }
+                    p_rgh {
+                        solver GAMG;
+                        agglomerator faceAreaPair;
+                        mergeLevels 1;
+                        cacheAgglomeration true;
+                        nCellsInCoarsestLevel 200;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        scaleCorrection true;
+                        tolerance 1e-06;
+                        relTol 0.0;
+                    }
+                    T {
+                        solver smoothSolver;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        tolerance 1e-06;
+                        relTol 0.0;
+                    }
+                    k {
+                        solver smoothSolver;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        tolerance 1e-06;
+                        relTol 0.1;
+                    }
+                    epsilon {
+                        solver smoothSolver;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        tolerance 1e-06;
+                        relTol 0.1;
+                    }
+                    CO2 {
+                        solver smoothSolver;
+                        smoother symGaussSeidel;
+                        maxIter 100;
+                        tolerance 1e-5;
+                        relTol 0.1;
+                    }
+                    smoke {
+                        solver smoothSolver;
+                        smoother symGaussSeidel;
+                        minIter 1;
+                        maxIter 100;
+                        tolerance 1e-5;
+                        relTol 0.1;
+                    }
+                }
+
+                relaxationFactors {
+                    fields {
+                        p 0.3;
+                        p_rgh 0.3;
+                    }
+                    equations {
+                        U 0.7;
+                        T 0.9;
+                        k 0.7;
+                        epsilon 0.7;
+                        CO2 0.7;
+                        smoke 0.7;
+                    }
+                }
+
+                SIMPLE {
+                    nNonOrthogonalCorrectors 0;
+                    pRefCell 0;
+                    pRefValue 0.0;
+                    pMin 1e-10;
+                    pMax 1e10;
+                    modifiedMomentumInterp true;
+                    residualControl {
+                    }
+                }
+
+                cache {
+                    grad(U);
+                }
+            }
+
+            fvOptions {
+                velocityLimiter {
+                    type velocityLimiterSource;
+                    active true;
+                    velocityLimiterSourceCoeffs {
+                        Ulimit 120.0;
+                        selectionMode all;
+                        velocityDamp false;
+                        velocityClip true;
+                        verbose true;
+                    }
+                }
+
+                YCO2 {
+                    active true;
+                    type solverOption;
+                    hookOp solve;
+                    solverOptionCoeffs {
+                        type concentrationTransport;
+                        fieldName CO2;
+                        solverOptions {
+                        }
+                    }
+                }
+                Ysmoke {
+                    active true;
+                    type solverOption;
+                    hookOp solve;
+                    solverOptionCoeffs {
+                        type concentrationTransport;
+                        fieldName smoke;
+                        solverOptions {
+                        }
+                    }
+                }
+
+                fixeCO2_Area {
+                    type scalarFixedValueConstraint;
+                    active yes;
+
+                    selectionMode cellZone;
+                    cellZone areaSource;
+                    fieldValues {
+                        CO2 1.0;
+                    }
+                }
+            }
+
+            controlDict {
+                application simpleFoam;
+                startFrom latestTime;
+                startTime 0;
+                stopAt endTime;
+                endTime 3000.0;
+                deltaT constant 1.0;
+                writeControl timeStep;
+                writeInterval 500.0;
+                purgeWrite 1;
+                writeFormat binary;
+                writeCompression compressed;
+                runTimeModifiable yes;
+            }
+        }
+        fields {
+            U {
+                initialisation
+                {
+                    type potentialFlow;
+                    initialiseUBCs true;
+                }
+            }
+            p_rgh {
+                initialisation
+                {
+                    type potentialFlow;
+                }
+            }
+            k {
+                initialisation
+                {
+                    type Prandtl;
+                }
+            }
+            epsilon {
+                initialisation
+                {
+                    type Prandtl;
+                }
+            }
+
+            T {
+                initialisation
+                {
+                    type boundaryValue;
+                    patch inlet;
+                }
+            }
+
+            CO2 {
+                initialisation
+                {
+                    type fixedValue;
+                    value uniform 0.0;
+                }
+            }
+            smoke {
+                initialisation
+                {
+                    type fixedValue;
+                    value uniform 0.0;
+                }
+            }
+        }
+
+        boundaryConditions {
+            inlet {
+                U {
+                    type interpolatedInletOutlet;
+                    value uniform ( 1.0 0.0 0.0 );
+                    profile table
+                    (
+                        (   1.0 ( 1.2168 0.0 0.0 ) )
+                        (   2.0 ( 1.4503 0.0 0.0 ) )
+                        (   3.0 ( 1.5881 0.0 0.0 ) )
+                        (   4.0 ( 1.6862 0.0 0.0 ) )
+                        (   5.0 ( 1.7625 0.0 0.0 ) )
+                        (   6.0 ( 1.8249 0.0 0.0 ) )
+                        (   7.0 ( 1.8777 0.0 0.0 ) )
+                        (   8.0 ( 1.9235 0.0 0.0 ) )
+                        (   9.0 ( 1.9639 0.0 0.0 ) )
+                        (  10.0 ( 2.0 0.0 0.0 ) )
+                        (  15.0 ( 2.1392 0.0 0.0 ) )
+                        (  20.0 ( 2.238 0.0 0.0 ) )
+                        (  25.0 ( 2.3147 0.0 0.0 ) )
+                        (  30.0 ( 2.3774 0.0 0.0 ) )
+                        (  35.0 ( 2.4303 0.0 0.0 ) )
+                        (  40.0 ( 2.4763 0.0 0.0 ) )
+                        (  45.0 ( 2.5168 0.0 0.0 ) )
+                        (  50.0 ( 2.553 0.0 0.0 ) )
+                        (  60.0 ( 2.6157 0.0 0.0 ) )
+                        (  70.0 ( 2.6687 0.0 0.0 ) )
+                        (  80.0 ( 2.7146 0.0 0.0 ) )
+                        (  90.0 ( 2.7552 0.0 0.0 ) )
+                        ( 100.0 ( 2.7914 0.0 0.0 ) )
+                        ( 125.0 ( 2.8682 0.0 0.0 ) )
+                        ( 150.0 ( 2.9309 0.0 0.0 ) )
+                        ( 175.0 ( 2.9839 0.0 0.0 ) )
+                        ( 200.0 ( 3.0299 0.0 0.0 ) )
+                        ( 225.0 ( 3.0704 0.0 0.0 ) )
+                        ( 250.0 ( 3.1066 0.0 0.0 ) )
+                        ( 300.0 ( 3.1694 0.0 0.0 ) )
+                        ( 350.0 ( 3.2224 0.0 0.0 ) )
+                        ( 400.0 ( 3.2684 0.0 0.0 ) )
+                        ( 450.0 ( 3.3089 0.0 0.0 ) )
+                        ( 500.0 ( 3.3451 0.0 0.0 ) )
+                        ( 600.0 ( 3.4079 0.0 0.0 ) )
+                        ( 700.0 ( 3.4609 0.0 0.0 ) )
+                        ( 800.0 ( 3.5069 0.0 0.0 ) )
+                        ( 900.0 ( 3.5474 0.0 0.0 ) )
+                        (1000.0 ( 3.5837 0.0 0.0 ) )
+                        (1500.0 ( 3.7232 0.0 0.0 ) )
+                        (2000.0 ( 3.8222 0.0 0.0 ) )
+                        (3000.0 ( 3.9617 0.0 0.0 ) )
+                        (5000.0 ( 4.1375 0.0 0.0 ) )
+                    );
+                    outOfBounds clamp;
+                    distanceType wallDistance;
+                    origin ( 0.0 0.0 0.0 );
+                    xscale constant 1.0;
+                    yscale constant 1.0;
+                    xoffset 0.0;
+                    yoffset constant ( 1.0 0.0 0.0 );
+                }
+                p_rgh {
+                    type fixedFluxPressure;
+                    value uniform 0.0;
+                    rho rhok;
+                }
+                p {
+                    type fixedFluxPressure;
+                    value uniform 0;
+                    rho rhok;
+                }
+                nut {
+                    type calculated;
+                    value uniform 0.0;
+                }
+                T {
+                    type fixedValue;
+                    value uniform 287.15;
+                }
+                k {
+                    type interpolatedFixedValue;
+                    value uniform 0.0;
+                    profile table
+                    (
+                        (1.0 0.0663)
+                        (5000.0 0.0663)
+                    );
+                    outOfBounds clamp;
+                    distanceType wallDistance;
+                    origin ( 0.0 0.0 0.0 );
+                    xscale constant 1.0;
+                    yscale constant 1.0;
+                    xoffset 0.0;
+                    yoffset constant 0.0;
+                }
+                epsilon {
+                    type interpolatedFixedValue;
+                    value uniform 0.0;
+                    profile table
+                    (
+                        (  1.0 0.0066)
+                        (  2.0 0.0034)
+                        (  3.0 0.0023)
+                        (  4.0 0.0017)
+                        (  5.0 0.0014)
+                        (  6.0 0.0011)
+                        (  7.0 0.0010)
+                        (  8.0 0.0009)
+                        (  9.0 0.0008)
+                        ( 10.0 0.0007)
+                        ( 15.0 0.0005)
+                        ( 20.0 0.0003)
+                        ( 25.0 0.0003)
+                        ( 30.0 0.0002)
+                        ( 35.0 0.0002)
+                        ( 40.0 0.0002)
+                        ( 45.0 0.0002)
+                        ( 50.0 0.0001)
+                        ( 60.0 0.0001)
+                        ( 70.0 0.0001)
+                        ( 80.0 0.0001)
+                        ( 90.0 0.0001)
+                        (100.0 0.0001)
+                        (125.0 0.0001)
+                        (150.0 0.0000)
+                        (5000.0 0.0000)
+                    );
+                    outOfBounds clamp;
+                    distanceType wallDistance;
+                    origin ( 0.0 0.0 0.0 );
+                    xscale constant 1.0;
+                    yscale constant 1.0;
+                    xoffset 0.0;
+                    yoffset constant 0.0;
+                }
+                CO2 {
+                    type fixedValue;
+                    value uniform 0.0;
+                }
+                smoke {
+                    type fixedValue;
+                    value uniform 0.0;
+                }
+            }
+            inlet_chimney {
+                U {
+                    type fixedValue;
+                    value uniform ( 0.0 0.0 9.395084785 );
+                }
+                p_rgh {
+                    type fixedFluxPressure;
+                    value uniform 0.0;
+                    rho rhok;
+                }
+                p {
+                    type fixedFluxPressure;
+                    value uniform 0;
+                    rho rhok;
+                }
+                nut {
+                    type calculated;
+                    value uniform 0.0;
+                }
+                T {
+                    type fixedValue;
+                    value uniform 341.23;
+                }
+                k {
+                    type turbulentIntensityKineticEnergyInlet;
+                    value uniform 0.1;
+                    intensity 0.05;
+                }
+                epsilon {
+                    type turbulentMixingLengthDissipationRateInlet;
+                    value uniform 0.01;
+                    mixingLength 0.01;
+                }
+                CO2 {
+                    type fixedValue;
+                    value uniform 0.0;
+                }
+                smoke {
+                    type fixedValue;
+                    value uniform 1.0;
+                }
+            }
+            outlet {
+                U {
+                    type inletOutlet;
+                    value uniform ( 0.0 0.0 0.0 );
+                    inletValue uniform ( 0.0 0.0 0.0 );
+                }
+                p_rgh {
+                    type fixedValue;
+                    value uniform 0.0;
+                }
+                p {
+                    type fixedValue;
+                    value uniform 0;
+                }
+                nut {
+                    type calculated;
+                    value uniform 0.0;
+                }
+                T {
+                    type inletOutlet;
+                    value uniform 287.15;
+                    inletValue uniform 287.15;
+                }
+                k {
+                    type turbulentIntensityKineticEnergyInlet;
+                    intensity 0.05;
+                    value uniform 0.1;
+                }
+                epsilon {
+                    type turbulentMixingLengthDissipationRateInlet;
+                    mixingLength 0.01;
+                    value uniform 0.01;
+                }
+                CO2 {
+                    type inletOutlet;
+                    inletValue uniform 0;
+                    value uniform 0;
+                }
+                smoke {
+                    type inletOutlet;
+                    inletValue uniform 0;
+                    value uniform 0;
+                }
+            }
+            terrain {
+                nut {
+                    type nutkAtmRoughWallFunction;
+                    value uniform 0.0;
+                    z0 uniform 0.03;
+                }
+            }
+            terrain_out {
+                nut {
+                    type nutkAtmRoughWallFunction;
+                    value uniform 0.0;
+                    z0 uniform 0.03;
+                }
+            }
+        }
+    }
+}
+
