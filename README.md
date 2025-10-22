@@ -1,6 +1,6 @@
 # OpenFOAM Language Support for VS Code
 
-![OpenFOAM Language Support Logo](logo.png)
+<img src="logo.png" alt="OpenFOAM Language Support Logo" width="100">
 
 A comprehensive VS Code extension providing syntax highlighting, IntelliSense, and workflow management for OpenFOAM dictionary files.
 
