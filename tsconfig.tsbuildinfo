@@ -1,1 +1,1 @@
-{"root":["./src/extension.ts","./src/extractor/extractkeywords.ts","./src/language-server/server.ts","./src/workflow/workflowpanel.ts"],"version":"5.9.3"}
+{"root":["./src/extension.ts","./src/extractor/extractkeywords.ts","./src/extractor/solverscraper.ts","./src/language-server/server.ts","./src/workflow/workflowpanel.ts"],"version":"5.9.3"}

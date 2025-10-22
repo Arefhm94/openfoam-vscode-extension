@@ -111,6 +111,8 @@
     "watch": "tsc -b -w",
     "pretest": "npm run compile",
     "extract-keywords": "node out/extractor/extractKeywords.js",
+    "scrape-solvers": "node out/extractor/solverScraper.js",
+    "update-database": "npm run scrape-solvers && npm run extract-keywords",
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {

@@ -43,15 +43,15 @@ class KeywordExtractor {
    */
   async extract(): Promise<Map<string, KeywordInfo>> {
     console.log('Starting keyword extraction from OpenFOAM source...');
-    
+
     // Add hardcoded essential keywords first
     this.addEssentialKeywords();
-    
+
     // Extract from source directories
     await this.extractFromDirectory(path.join(this.sourceRoot, 'src'));
     await this.extractFromDirectory(path.join(this.sourceRoot, 'applications'));
     await this.extractFromDirectory(path.join(this.sourceRoot, 'etc', 'caseDicts'));
-    
+
     console.log(`Extracted ${this.keywords.size} keywords`);
     return this.keywords;
   }
@@ -2154,7 +2154,7 @@ class KeywordExtractor {
 
       while ((match = lookupPattern.exec(content)) !== null) {
         const keywordName = match[1];
-        
+
         // Try to find associated documentation
         const lineNum = content.substring(0, match.index).split('\n').length;
         const description = this.extractDocNearLine(content, lineNum);
@@ -2173,7 +2173,7 @@ class KeywordExtractor {
       const keyPattern = /"([a-zA-Z][a-zA-Z0-9_]*)"\s*,/g;
       while ((match = keyPattern.exec(content)) !== null) {
         const keywordName = match[1];
-        
+
         if (keywordName.length > 2 && !this.keywords.has(keywordName)) {
           const lineNum = content.substring(0, match.index).split('\n').length;
           const description = this.extractDocNearLine(content, lineNum);
@@ -2203,12 +2203,12 @@ class KeywordExtractor {
     // Look backwards for documentation comments
     for (let i = searchEnd - 1; i >= searchStart; i--) {
       const line = lines[i].trim();
-      
+
       // Doxygen-style comments
       if (line.startsWith('//!') || line.startsWith('///')) {
         return line.replace(/^\/\/[!/]\s*/, '').trim();
       }
-      
+
       // Block comments
       if (line.includes('*/')) {
         let docBlock = '';
@@ -2223,7 +2223,7 @@ class KeywordExtractor {
           }
         }
       }
-      
+
       // Stop at non-comment lines
       if (line && !line.startsWith('//') && !line.startsWith('*')) {
         break;
@@ -2247,7 +2247,7 @@ class KeywordExtractor {
 
       while ((match = keyPattern.exec(content)) !== null) {
         const keywordName = match[2];
-        
+
         if (!this.keywords.has(keywordName)) {
           this.addKeyword({
             name: keywordName,
@@ -2267,46 +2267,46 @@ class KeywordExtractor {
    */
   private categorizeKeyword(name: string): KeywordInfo['category'] {
     const lower = name.toLowerCase();
-    
-    if (lower.includes('time') || lower.includes('write') || lower.includes('read') || 
-        ['application', 'startfrom', 'stopat', 'purgewrite'].includes(lower)) {
+
+    if (lower.includes('time') || lower.includes('write') || lower.includes('read') ||
+      ['application', 'startfrom', 'stopat', 'purgewrite'].includes(lower)) {
       return 'control';
     }
-    
+
     if (lower.includes('solver') || lower.includes('tolerance') || lower.includes('relax') ||
-        lower.includes('preconditioner') || lower.includes('smoother')) {
+      lower.includes('preconditioner') || lower.includes('smoother')) {
       return 'solver';
     }
-    
+
     if (lower.includes('scheme') || lower.includes('ddt') || lower.includes('grad') ||
-        lower.includes('div') || lower.includes('laplacian') || lower.includes('interpolation')) {
+      lower.includes('div') || lower.includes('laplacian') || lower.includes('interpolation')) {
       return 'scheme';
     }
-    
+
     if (lower.includes('bound') || lower === 'type' || lower === 'value' ||
-        lower.includes('inlet') || lower.includes('outlet') || lower.includes('wall')) {
+      lower.includes('inlet') || lower.includes('outlet') || lower.includes('wall')) {
       return 'boundary';
     }
-    
+
     if (lower.includes('function') || lower === 'libs' || lower.includes('output')) {
       return 'function';
     }
-    
+
     if (lower.includes('dimension') || lower.includes('uniform') || lower.includes('internal')) {
       return 'property';
     }
-    
+
     if (lower.includes('mesh') || lower.includes('decompose') || lower.includes('refine')) {
       return 'utility';
     }
-    
+
     return 'other';
   }
 
   /**
    * Add a keyword to the database
    */
-  private addKeyword(keyword: KeywordInfo): void {
+  addKeyword(keyword: KeywordInfo): void {
     if (!this.keywords.has(keyword.name)) {
       this.keywords.set(keyword.name, keyword);
     }
@@ -2316,7 +2316,7 @@ class KeywordExtractor {
    * Save keywords to JSON file
    */
   saveToFile(outputPath: string): void {
-    const keywordArray = Array.from(this.keywords.values()).sort((a, b) => 
+    const keywordArray = Array.from(this.keywords.values()).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
 
@@ -2346,15 +2346,73 @@ async function main() {
 
   const extractor = new KeywordExtractor(sourceRoot);
   await extractor.extract();
-  
+
   // Ensure output directory exists
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
-  
+
+  // Try to merge solver information if available
+  // Look in multiple possible locations for the solver data
+  const possibleSolverPaths = [
+    path.join(outputDir, 'openfoam-solvers.json'),  // Same directory as output
+    path.join(__dirname, '..', '..', 'data', 'openfoam-solvers.json'),  // Project root data/
+    path.join(process.cwd(), 'data', 'openfoam-solvers.json'),  // Current working directory data/
+  ];
+
+  let solverDataPath: string | null = null;
+  for (const possiblePath of possibleSolverPaths) {
+    if (fs.existsSync(possiblePath)) {
+      solverDataPath = possiblePath;
+      break;
+    }
+  }
+
+  if (solverDataPath) {
+    console.log('');
+    console.log('Merging solver information...');
+    try {
+      const solverData = JSON.parse(fs.readFileSync(solverDataPath, 'utf-8'));
+
+      if (solverData.solvers && Array.isArray(solverData.solvers)) {
+        for (const solver of solverData.solvers) {
+          // Convert solver info to keyword format
+          const solverKeyword: KeywordInfo = {
+            name: solver.name,
+            description: solver.description,
+            category: 'solver',
+            sourceFile: solver.url || 'OpenFOAM C++ Documentation',
+          };
+
+          // Add examples if applications are available
+          if (solver.applications && solver.applications.length > 0) {
+            solverKeyword.examples = [
+              `application     ${solver.name};\n\n// Applications: ${solver.applications.join(', ')}`
+            ];
+          } else {
+            solverKeyword.examples = [`application     ${solver.name};`];
+          }
+
+          // Add purpose as part of description
+          if (solver.purpose) {
+            solverKeyword.description += `\n\nPurpose: ${solver.purpose}`;
+          }
+
+          extractor.addKeyword(solverKeyword);
+        }
+        console.log(`  Merged ${solverData.solvers.length} solvers into keyword database`);
+      }
+    } catch (error) {
+      console.error('  Warning: Failed to merge solver data:', error);
+    }
+  } else {
+    console.log('');
+    console.log('Note: No solver data found. Run "npm run scrape-solvers" first to fetch solver information.');
+  }
+
   extractor.saveToFile(outputPath);
-  
+
   console.log('');
   console.log('Extraction complete!');
 }
