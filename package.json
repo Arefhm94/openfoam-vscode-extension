@@ -2,7 +2,7 @@
   "name": "openfoam-language-support",
   "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "publisher": "arefhm94",
   "repository": {
     "type": "git",
@@ -47,7 +47,22 @@
           "topoSetDict",
           "createPatchDict",
           "refineMeshDict",
-          "setFieldsDict"
+          "setFieldsDict",
+          "U",
+          "p",
+          "p_rgh",
+          "k",
+          "epsilon",
+          "omega",
+          "nut",
+          "nuTilda",
+          "alpha",
+          "alpha.water",
+          "alpha.air",
+          "T",
+          "rho",
+          "mu",
+          "nu"
         ],
         "configuration": "./language-configuration.json"
       }

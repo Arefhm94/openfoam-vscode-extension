@@ -87,14 +87,27 @@ function startLanguageServer(context: vscode.ExtensionContext): LanguageClient {
     // Register the server for OpenFOAM documents
     documentSelector: [
       { scheme: "file", language: "openfoam" },
-      { scheme: "file", pattern: "**/controlDict" },
-      { scheme: "file", pattern: "**/fvSchemes" },
-      { scheme: "file", pattern: "**/fvSolution" },
-      { scheme: "file", pattern: "**/blockMeshDict" },
-      { scheme: "file", pattern: "**/snappyHexMeshDict" },
-      { scheme: "file", pattern: "**/decomposeParDict" },
+      { scheme: "file", pattern: "**/controlDict*" },
+      { scheme: "file", pattern: "**/fvSchemes*" },
+      { scheme: "file", pattern: "**/fvSolution*" },
+      { scheme: "file", pattern: "**/blockMeshDict*" },
+      { scheme: "file", pattern: "**/snappyHexMeshDict*" },
+      { scheme: "file", pattern: "**/decomposeParDict*" },
       { scheme: "file", pattern: "**/*Properties" },
       { scheme: "file", pattern: "**/*Dict" },
+      // OpenFOAM field files (0, constant, system directories)
+      { scheme: "file", pattern: "**/0/U" },
+      { scheme: "file", pattern: "**/0/p*" },
+      { scheme: "file", pattern: "**/0/k" },
+      { scheme: "file", pattern: "**/0/epsilon" },
+      { scheme: "file", pattern: "**/0/omega" },
+      { scheme: "file", pattern: "**/0/nut*" },
+      { scheme: "file", pattern: "**/0/nuTilda" },
+      { scheme: "file", pattern: "**/0/alpha*" },
+      { scheme: "file", pattern: "**/0/T" },
+      { scheme: "file", pattern: "**/0/rho" },
+      { scheme: "file", pattern: "**/0/mu" },
+      { scheme: "file", pattern: "**/0/nu" },
     ],
     synchronize: {
       // Synchronize configuration section 'openfoam' to the server

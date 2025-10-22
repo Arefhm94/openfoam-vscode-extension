@@ -9,4 +9,3 @@ src/**
 **/.eslintrc.json
 **/*.ts
 !out/**/*.js
-node_modules/**
