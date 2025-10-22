@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedAt": "2025-10-21T23:42:41.419Z",
   "sourceRoot": "/Users/arefmoalemi/Downloads/OpenFOAM-13-master",
-  "keywordCount": 3072,
+  "keywordCount": 3076,
   "keywords": [
     {
       "name": "a",
@@ -747,7 +747,7 @@
     },
     {
       "name": "alphatJayatillekeWallFunction",
-      "description": "Thermal diffusivity (α_t) wall function using Jayatilleke's correlation. Accounts for varying turbulent Prandtl number near walls: α_t = ν_t/Pr_t, where Pr_t varies with y⁺. More accurate than constant Pr_t for heat transfer. Used for conjugate heat transfer and thermal boundary layers.",
+      "description": "Thermal diffusivity (\u03b1_t) wall function using Jayatilleke's correlation. Accounts for varying turbulent Prandtl number near walls: \u03b1_t = \u03bd_t/Pr_t, where Pr_t varies with y\u207a. More accurate than constant Pr_t for heat transfer. Used for conjugate heat transfer and thermal boundary layers.",
       "category": "boundary",
       "parameters": [
         {
@@ -766,7 +766,7 @@
           "name": "kappa",
           "type": "scalar",
           "required": false,
-          "description": "von Kármán constant"
+          "description": "von K\u00e1rm\u00e1n constant"
         },
         {
           "name": "E",
@@ -1610,7 +1610,7 @@
     },
     {
       "name": "bounded",
-      "description": "Bounded variant of Gauss scheme that includes material time derivative term: Dϕ/Dt = ∂ϕ/∂t + ∇·(Uϕ) - (∇·U)ϕ. Third term helps maintain boundedness before convergence (∇·U=0). Used in steady-state cases to improve stability and convergence. Syntax: bounded Gauss <scheme>.",
+      "description": "Bounded variant of Gauss scheme that includes material time derivative term: D\u03d5/Dt = \u2202\u03d5/\u2202t + \u2207\u00b7(U\u03d5) - (\u2207\u00b7U)\u03d5. Third term helps maintain boundedness before convergence (\u2207\u00b7U=0). Used in steady-state cases to improve stability and convergence. Syntax: bounded Gauss <scheme>.",
       "category": "scheme",
       "examples": [
         "div(phi,U)      bounded Gauss limitedLinearV 1;",
@@ -2749,7 +2749,7 @@
     },
     {
       "name": "CoEuler",
-      "description": "Courant number based automatic time-stepping. Adjusts global time step to maintain specified maximum Courant number. Time step varies to keep Co ≤ Co_max. Useful for unsteady flows with varying velocity scales. Maintains stability while maximizing efficiency.",
+      "description": "Courant number based automatic time-stepping. Adjusts global time step to maintain specified maximum Courant number. Time step varies to keep Co \u2264 Co_max. Useful for unsteady flows with varying velocity scales. Maintains stability while maximizing efficiency.",
       "category": "scheme",
       "examples": [
         "ddtSchemes\n{\n    default         CoEuler;\n}"
@@ -3648,7 +3648,7 @@
     },
     {
       "name": "d2dt2Schemes",
-      "description": "Second time derivative (∂²ϕ/∂t²) discretization schemes sub-dictionary. Only Euler scheme is available. Used rarely for acceleration terms in solid mechanics.",
+      "description": "Second time derivative (\u2202\u00b2\u03d5/\u2202t\u00b2) discretization schemes sub-dictionary. Only Euler scheme is available. Used rarely for acceleration terms in solid mechanics.",
       "category": "scheme",
       "examples": [
         "d2dt2Schemes\n{\n    default         Euler;\n}"
@@ -5076,7 +5076,7 @@
     },
     {
       "name": "epsilonWallFunction",
-      "description": "Wall function for turbulent dissipation rate (ε). Calculates near-wall ε using law-of-the-wall: ε_w = C_μ^(3/4) * k^(3/2) / (κ*y), where y is wall distance. Used with k-ε turbulence models. Ensures proper dissipation in the boundary layer.",
+      "description": "Wall function for turbulent dissipation rate (\u03b5). Calculates near-wall \u03b5 using law-of-the-wall: \u03b5_w = C_\u03bc^(3/4) * k^(3/2) / (\u03ba*y), where y is wall distance. Used with k-\u03b5 turbulence models. Ensures proper dissipation in the boundary layer.",
       "category": "boundary",
       "parameters": [
         {
@@ -5089,7 +5089,7 @@
           "name": "kappa",
           "type": "scalar",
           "required": false,
-          "description": "von Kármán constant (default: 0.41)"
+          "description": "von K\u00e1rm\u00e1n constant (default: 0.41)"
         },
         {
           "name": "E",
@@ -5122,7 +5122,7 @@
     },
     {
       "name": "equations",
-      "description": "Sub-dictionary within relaxationFactors for equation-level under-relaxation. Manipulates matrix coefficients before solving. Used in steady-state SIMPLE. Typical: U=0.7, turbulence fields=0.7. Higher α = faster convergence but less stable.",
+      "description": "Sub-dictionary within relaxationFactors for equation-level under-relaxation. Manipulates matrix coefficients before solving. Used in steady-state SIMPLE. Typical: U=0.7, turbulence fields=0.7. Higher \u03b1 = faster convergence but less stable.",
       "category": "solver",
       "examples": [
         "equations\n{\n    U               0.7;\n    \"(k|epsilon|omega)\" 0.7;\n}"
@@ -5379,7 +5379,7 @@
           "name": "q",
           "type": "scalar",
           "required": false,
-          "description": "Heat flux [W/m²] for flux mode"
+          "description": "Heat flux [W/m\u00b2] for flux mode"
         },
         {
           "name": "Q",
@@ -5391,7 +5391,7 @@
           "name": "h",
           "type": "scalar",
           "required": false,
-          "description": "Heat transfer coefficient [W/m²·K] for coefficient mode"
+          "description": "Heat transfer coefficient [W/m\u00b2\u00b7K] for coefficient mode"
         },
         {
           "name": "Ta",
@@ -5877,7 +5877,7 @@
     },
     {
       "name": "fields",
-      "description": "Sub-dictionary within relaxationFactors for field-level under-relaxation. Modifies field after solving: ϕ_new = α*ϕ_computed + (1-α)*ϕ_old. Used in steady-state SIMPLE algorithm. Typical: p=0.3, other fields via equations.",
+      "description": "Sub-dictionary within relaxationFactors for field-level under-relaxation. Modifies field after solving: \u03d5_new = \u03b1*\u03d5_computed + (1-\u03b1)*\u03d5_old. Used in steady-state SIMPLE algorithm. Typical: p=0.3, other fields via equations.",
       "category": "solver",
       "examples": [
         "fields\n{\n    p               0.3;\n}"
@@ -5957,7 +5957,7 @@
     },
     {
       "name": "filteredLinear",
-      "description": "Filtered linear central differencing scheme. Applies filtering to linear scheme: ϕ_f = linear + filter*(upwind - linear). Filter coefficient k (0-1) blends between linear (k=0) and upwind (k=1). Reduces oscillations while maintaining second-order accuracy.",
+      "description": "Filtered linear central differencing scheme. Applies filtering to linear scheme: \u03d5_f = linear + filter*(upwind - linear). Filter coefficient k (0-1) blends between linear (k=0) and upwind (k=1). Reduces oscillations while maintaining second-order accuracy.",
       "category": "scheme",
       "parameters": [
         {
@@ -6027,7 +6027,7 @@
     },
     {
       "name": "fixedGradient",
-      "description": "Boundary condition that sets a fixed gradient constraint: ∂ϕ/∂n = constant. The patch value is calculated from the gradient and adjacent cell values. Used for heat flux, velocity gradients, and other gradient-specified conditions.",
+      "description": "Boundary condition that sets a fixed gradient constraint: \u2202\u03d5/\u2202n = constant. The patch value is calculated from the gradient and adjacent cell values. Used for heat flux, velocity gradients, and other gradient-specified conditions.",
       "category": "boundary",
       "parameters": [
         {
@@ -6049,7 +6049,7 @@
     },
     {
       "name": "fixedNormalSlip",
-      "description": "Slip condition with fixed normal component and zero tangential gradient. Normal component: U·n = fixedValue, tangential: ∂U_t/∂n = 0. Used for symmetry planes with known normal flow, permeable walls.",
+      "description": "Slip condition with fixed normal component and zero tangential gradient. Normal component: U\u00b7n = fixedValue, tangential: \u2202U_t/\u2202n = 0. Used for symmetry planes with known normal flow, permeable walls.",
       "category": "boundary",
       "parameters": [
         {
@@ -6195,7 +6195,7 @@
           "name": "volumetricFlowRate",
           "type": "scalar",
           "required": false,
-          "description": "Target volumetric flow rate (m³/s)"
+          "description": "Target volumetric flow rate (m\u00b3/s)"
         },
         {
           "name": "rho",
@@ -7514,7 +7514,7 @@
     },
     {
       "name": "inletOutlet",
-      "description": "Generic inlet-outlet boundary condition. Applies zeroGradient for outflow (ϕ·n < 0) and fixedValue for inflow (ϕ·n ≥ 0). Prevents backflow issues at outlets while allowing reverse flow with specified inletValue. Commonly used for scalars at pressure outlets.",
+      "description": "Generic inlet-outlet boundary condition. Applies zeroGradient for outflow (\u03d5\u00b7n < 0) and fixedValue for inflow (\u03d5\u00b7n \u2265 0). Prevents backflow issues at outlets while allowing reverse flow with specified inletValue. Commonly used for scalars at pressure outlets.",
       "category": "boundary",
       "parameters": [
         {
@@ -8205,7 +8205,7 @@
     },
     {
       "name": "kqRWallFunction",
-      "description": "Wall function for turbulent kinetic energy (k), turbulence stress invariant (q), and Reynolds stress (R) fields. Provides appropriate near-wall treatment for k-ε and Reynolds stress models. Sets k to small non-zero value, enforces realizability for R.",
+      "description": "Wall function for turbulent kinetic energy (k), turbulence stress invariant (q), and Reynolds stress (R) fields. Provides appropriate near-wall treatment for k-\u03b5 and Reynolds stress models. Sets k to small non-zero value, enforces realizability for R.",
       "category": "boundary",
       "examples": [
         "type            kqRWallFunction;\nvalue           uniform 0;"
@@ -8552,7 +8552,7 @@
     },
     {
       "name": "limited corrected",
-      "description": "Limited non-orthogonal correction for surface normal gradient. Applies partial correction: ψ controls limiting strength. ψ=0: uncorrected, ψ=0.33: correction ≤ 0.5×orthogonal part (stable), ψ=0.5: correction ≤ orthogonal part (accurate), ψ=1: full corrected. Use for max non-orthogonality 75-85°.",
+      "description": "Limited non-orthogonal correction for surface normal gradient. Applies partial correction: \u03c8 controls limiting strength. \u03c8=0: uncorrected, \u03c8=0.33: correction \u2264 0.5\u00d7orthogonal part (stable), \u03c8=0.5: correction \u2264 orthogonal part (accurate), \u03c8=1: full corrected. Use for max non-orthogonality 75-85\u00b0.",
       "category": "scheme",
       "parameters": [
         {
@@ -8607,7 +8607,7 @@
     },
     {
       "name": "limitedLinear01",
-      "description": "Specialized limited linear scheme for scalar fields bounded between 0 and 1 (e.g., volume fraction α, flame regress variable b). Stronger limiting than standard limitedLinear to enforce 0-1 bounds. Coefficient typically 1.",
+      "description": "Specialized limited linear scheme for scalar fields bounded between 0 and 1 (e.g., volume fraction \u03b1, flame regress variable b). Stronger limiting than standard limitedLinear to enforce 0-1 bounds. Coefficient typically 1.",
       "category": "scheme",
       "parameters": [
         {
@@ -8646,7 +8646,7 @@
     },
     {
       "name": "linear",
-      "description": "Second-order central differencing scheme. Linear interpolation between cell centers: ϕ_f = w*ϕ_P + (1-w)*ϕ_N, where w is based on distance. Non-diffusive and accurate but unbounded - can produce oscillations/overshoots. Use with caution for convection-dominated flows.",
+      "description": "Second-order central differencing scheme. Linear interpolation between cell centers: \u03d5_f = w*\u03d5_P + (1-w)*\u03d5_N, where w is based on distance. Non-diffusive and accurate but unbounded - can produce oscillations/overshoots. Use with caution for convection-dominated flows.",
       "category": "scheme",
       "examples": [
         "div(phi,U)      Gauss linear;",
@@ -8698,7 +8698,7 @@
     },
     {
       "name": "linearUpwind",
-      "description": "Second-order upwind scheme reducing diffusion of pure upwind. Uses upwind cell gradient: ϕ_f = ϕ_U + ∇ϕ_U·d. More accurate than first-order upwind while maintaining stability. Popular for momentum advection. Naturally includes skewness correction.",
+      "description": "Second-order upwind scheme reducing diffusion of pure upwind. Uses upwind cell gradient: \u03d5_f = \u03d5_U + \u2207\u03d5_U\u00b7d. More accurate than first-order upwind while maintaining stability. Popular for momentum advection. Naturally includes skewness correction.",
       "category": "scheme",
       "parameters": [
         {
@@ -8814,7 +8814,7 @@
     },
     {
       "name": "localBlended",
-      "description": "Local cell-by-cell blending between two schemes using a blending factor field. Blending = scheme1*α + scheme2*(1-α), where α varies spatially. Enables adaptive schemes - e.g., upwind in shock regions, linear elsewhere. Requires creating blending factor field.",
+      "description": "Local cell-by-cell blending between two schemes using a blending factor field. Blending = scheme1*\u03b1 + scheme2*(1-\u03b1), where \u03b1 varies spatially. Enables adaptive schemes - e.g., upwind in shock regions, linear elsewhere. Requires creating blending factor field.",
       "category": "scheme",
       "parameters": [
         {
@@ -8836,7 +8836,7 @@
     },
     {
       "name": "localEuler",
-      "description": "Local time-stepping scheme for steady-state acceleration. Each cell advances with local time step based on local CFL: Δt_local = Co*Δx/|u|. Dramatically speeds steady-state convergence by 10-100x. Only for steady flows - not physical time-accurate.",
+      "description": "Local time-stepping scheme for steady-state acceleration. Each cell advances with local time step based on local CFL: \u0394t_local = Co*\u0394x/|u|. Dramatically speeds steady-state convergence by 10-100x. Only for steady flows - not physical time-accurate.",
       "category": "scheme",
       "examples": [
         "ddtSchemes\n{\n    default         localEuler;\n}"
@@ -10071,7 +10071,7 @@
     },
     {
       "name": "mixed",
-      "description": "Base class for mixed-type boundary conditions that blend fixed value and normal gradient: x_p = w*refValue + (1-w)*(x_c + ∇_⊥x/Δ). Weight field valueFraction (0-1) controls contribution. w=1 gives fixedValue, w=0 gives fixedGradient. Not usually applied directly - use derived conditions like inletOutlet.",
+      "description": "Base class for mixed-type boundary conditions that blend fixed value and normal gradient: x_p = w*refValue + (1-w)*(x_c + \u2207_\u22a5x/\u0394). Weight field valueFraction (0-1) controls contribution. w=1 gives fixedValue, w=0 gives fixedGradient. Not usually applied directly - use derived conditions like inletOutlet.",
       "category": "boundary",
       "parameters": [
         {
@@ -10687,7 +10687,7 @@
     },
     {
       "name": "nCorrectors",
-      "description": "Number of PISO pressure-velocity corrector iterations per outer loop. Each corrector solves pressure equation and updates velocity. Higher values improve accuracy but increase cost. Typically 2-3 for PISO, 1-2 for PIMPLE. Must be ≥1.",
+      "description": "Number of PISO pressure-velocity corrector iterations per outer loop. Each corrector solves pressure equation and updates velocity. Higher values improve accuracy but increase cost. Typically 2-3 for PISO, 1-2 for PIMPLE. Must be \u22651.",
       "category": "solver",
       "parameters": [
         {
@@ -11550,14 +11550,14 @@
     },
     {
       "name": "nu",
-      "description": "Kinematic viscosity (ν = μ/ρ) for incompressible flows. Dimensions [m²/s]. Viscosity of water ≈ 1e-6, air ≈ 1.5e-5 at 20°C. Higher values increase viscous dissipation and damping. Key parameter affecting Reynolds number Re = UL/ν.",
+      "description": "Kinematic viscosity (\u03bd = \u03bc/\u03c1) for incompressible flows. Dimensions [m\u00b2/s]. Viscosity of water \u2248 1e-6, air \u2248 1.5e-5 at 20\u00b0C. Higher values increase viscous dissipation and damping. Key parameter affecting Reynolds number Re = UL/\u03bd.",
       "category": "property",
       "parameters": [
         {
           "name": "value",
           "type": "scalar",
           "required": true,
-          "description": "Kinematic viscosity [m²/s]"
+          "description": "Kinematic viscosity [m\u00b2/s]"
         },
         {
           "name": "dimensions",
@@ -11687,7 +11687,7 @@
     },
     {
       "name": "nutkWallFunction",
-      "description": "Wall function for turbulent kinematic viscosity (ν_t). Calculates near-wall turbulent viscosity using law-of-the-wall velocity profile. Ensures smooth transition between viscous sublayer (ν_t ≈ 0) and log layer (ν_t = κ*y*u_τ). Used at all wall boundaries in turbulent flows.",
+      "description": "Wall function for turbulent kinematic viscosity (\u03bd_t). Calculates near-wall turbulent viscosity using law-of-the-wall velocity profile. Ensures smooth transition between viscous sublayer (\u03bd_t \u2248 0) and log layer (\u03bd_t = \u03ba*y*u_\u03c4). Used at all wall boundaries in turbulent flows.",
       "category": "boundary",
       "parameters": [
         {
@@ -11700,7 +11700,7 @@
           "name": "kappa",
           "type": "scalar",
           "required": false,
-          "description": "von Kármán constant"
+          "description": "von K\u00e1rm\u00e1n constant"
         },
         {
           "name": "E",
@@ -11841,7 +11841,7 @@
     },
     {
       "name": "omegaWallFunction",
-      "description": "Wall function for specific dissipation rate (ω = ε/k). Used with k-ω and SST turbulence models. Provides accurate near-wall behavior: ω_w = sqrt(k)/(C_μ^(1/4)*κ*y). More robust than ε near walls, making k-ω suitable for adverse pressure gradients.",
+      "description": "Wall function for specific dissipation rate (\u03c9 = \u03b5/k). Used with k-\u03c9 and SST turbulence models. Provides accurate near-wall behavior: \u03c9_w = sqrt(k)/(C_\u03bc^(1/4)*\u03ba*y). More robust than \u03b5 near walls, making k-\u03c9 suitable for adverse pressure gradients.",
       "category": "boundary",
       "parameters": [
         {
@@ -12055,7 +12055,7 @@
     },
     {
       "name": "orthogonal",
-      "description": "Basic orthogonal surface normal gradient: (ϕ_neighbor - ϕ_owner)/d. Second-order accurate only when cell-cell vector is perpendicular to face. Recommended only for highly orthogonal meshes (max non-orthogonality < 5°). No non-orthogonal correction applied.",
+      "description": "Basic orthogonal surface normal gradient: (\u03d5_neighbor - \u03d5_owner)/d. Second-order accurate only when cell-cell vector is perpendicular to face. Recommended only for highly orthogonal meshes (max non-orthogonality < 5\u00b0). No non-orthogonal correction applied.",
       "category": "scheme",
       "examples": [
         "default         orthogonal;"
@@ -12148,7 +12148,7 @@
           "name": "outletValue",
           "type": "field",
           "required": true,
-          "description": "Value for outflow (ϕ·n < 0)"
+          "description": "Value for outflow (\u03d5\u00b7n < 0)"
         },
         {
           "name": "phi",
@@ -12191,7 +12191,7 @@
     },
     {
       "name": "outletPhaseMeanVelocity",
-      "description": "Outlet velocity for multiphase flows maintaining specified mean velocity in one phase. Calculates phase-weighted average velocity: U_mean = Σ(α*U*A) / Σ(α*A). Used in VOF to control liquid discharge rate.",
+      "description": "Outlet velocity for multiphase flows maintaining specified mean velocity in one phase. Calculates phase-weighted average velocity: U_mean = \u03a3(\u03b1*U*A) / \u03a3(\u03b1*A). Used in VOF to control liquid discharge rate.",
       "category": "boundary",
       "parameters": [
         {
@@ -13052,7 +13052,7 @@
     },
     {
       "name": "PISO",
-      "description": "Pressure Implicit with Splitting of Operators algorithm for transient flows. Iterates pressure-velocity coupling within each time step: momentum predictor → pressure solution → velocity correction (repeat nCorrectors times). Suitable for transient incompressible flows with small time steps. More efficient than PIMPLE for time-accurate simulations.",
+      "description": "Pressure Implicit with Splitting of Operators algorithm for transient flows. Iterates pressure-velocity coupling within each time step: momentum predictor \u2192 pressure solution \u2192 velocity correction (repeat nCorrectors times). Suitable for transient incompressible flows with small time steps. More efficient than PIMPLE for time-accurate simulations.",
       "category": "solver",
       "parameters": [
         {
@@ -13538,7 +13538,7 @@
     },
     {
       "name": "Pr",
-      "description": "Molecular Prandtl number (Pr = ν/α = momentum diffusivity / thermal diffusivity). Dimensionless ratio characterizing relative importance of momentum and heat transport. Air ≈ 0.7, water ≈ 7. Affects thermal boundary layer thickness relative to velocity boundary layer.",
+      "description": "Molecular Prandtl number (Pr = \u03bd/\u03b1 = momentum diffusivity / thermal diffusivity). Dimensionless ratio characterizing relative importance of momentum and heat transport. Air \u2248 0.7, water \u2248 7. Affects thermal boundary layer thickness relative to velocity boundary layer.",
       "category": "property",
       "parameters": [
         {
@@ -13698,7 +13698,7 @@
     },
     {
       "name": "pressureInletOutletVelocity",
-      "description": "Velocity boundary condition for pressure-driven flows. At outflow (ϕ·n < 0): applies zeroGradient. At inflow (ϕ·n ≥ 0): applies fixedValue. Typically paired with totalPressure for the pressure field. Ensures velocity correctly responds to pressure-specified boundaries.",
+      "description": "Velocity boundary condition for pressure-driven flows. At outflow (\u03d5\u00b7n < 0): applies zeroGradient. At inflow (\u03d5\u00b7n \u2265 0): applies fixedValue. Typically paired with totalPressure for the pressure field. Ensures velocity correctly responds to pressure-specified boundaries.",
       "category": "boundary",
       "parameters": [
         {
@@ -13744,7 +13744,7 @@
     },
     {
       "name": "prghPressure",
-      "description": "Static pressure for p_rgh field with adjustments for gravity: p_rgh = p_static - ρgh. Adjusts reference pressure for hydrostatic effects. Used at outlets in buoyancy-driven incompressible flows.",
+      "description": "Static pressure for p_rgh field with adjustments for gravity: p_rgh = p_static - \u03c1gh. Adjusts reference pressure for hydrostatic effects. Used at outlets in buoyancy-driven incompressible flows.",
       "category": "boundary",
       "parameters": [
         {
@@ -13760,7 +13760,7 @@
     },
     {
       "name": "prghTotalHydrostaticPressure",
-      "description": "Total hydrostatic pressure boundary condition for p_rgh = p - ρgh field. Used in buoyancy-driven flows with variable density. Specifies total pressure p0 = p_rgh + ρgh, solver computes p_rgh. Essential for incompressibleVoF and buoyantFoam solvers.",
+      "description": "Total hydrostatic pressure boundary condition for p_rgh = p - \u03c1gh field. Used in buoyancy-driven flows with variable density. Specifies total pressure p0 = p_rgh + \u03c1gh, solver computes p_rgh. Essential for incompressibleVoF and buoyantFoam solvers.",
       "category": "boundary",
       "parameters": [
         {
@@ -13782,7 +13782,7 @@
     },
     {
       "name": "prghTotalPressure",
-      "description": "Total pressure for p_rgh field: p0 = p_rgh + 0.5*ρ*|U|² + ρgh. Combines dynamic and hydrostatic pressure. Used at inlets/outlets in buoyancy-driven flows. Like totalPressure but for p_rgh instead of p.",
+      "description": "Total pressure for p_rgh field: p0 = p_rgh + 0.5*\u03c1*|U|\u00b2 + \u03c1gh. Combines dynamic and hydrostatic pressure. Used at inlets/outlets in buoyancy-driven flows. Like totalPressure but for p_rgh instead of p.",
       "category": "boundary",
       "parameters": [
         {
@@ -14696,7 +14696,7 @@
     },
     {
       "name": "relaxationFactors",
-      "description": "Under-relaxation factors for stabilizing SIMPLE algorithm. Fields are updated: ϕ_new = α*ϕ_computed + (1-α)*ϕ_old, where α ∈ (0,1]. Lower values (0.3-0.7) improve stability but slow convergence. Equations relaxation applies to matrix coefficients. Essential for steady-state SIMPLE solvers.",
+      "description": "Under-relaxation factors for stabilizing SIMPLE algorithm. Fields are updated: \u03d5_new = \u03b1*\u03d5_computed + (1-\u03b1)*\u03d5_old, where \u03b1 \u2208 (0,1]. Lower values (0.3-0.7) improve stability but slow convergence. Equations relaxation applies to matrix coefficients. Essential for steady-state SIMPLE solvers.",
       "category": "solver",
       "parameters": [
         {
@@ -15227,7 +15227,7 @@
     },
     {
       "name": "rotatingWallVelocity",
-      "description": "Rotating wall velocity for rotating reference frames. Calculates velocity from angular velocity ω and position: U = ω × r. Used for impeller blades, turbine rotors, rotating cylinders. Specify origin, axis, and rpm or omega.",
+      "description": "Rotating wall velocity for rotating reference frames. Calculates velocity from angular velocity \u03c9 and position: U = \u03c9 \u00d7 r. Used for impeller blades, turbine rotors, rotating cylinders. Specify origin, axis, and rpm or omega.",
       "category": "boundary",
       "parameters": [
         {
@@ -15928,7 +15928,7 @@
     },
     {
       "name": "SIMPLE",
-      "description": "Semi-Implicit Method for Pressure-Linked Equations. Iterative steady-state algorithm: solve momentum → solve pressure → correct velocity → repeat until convergence. Requires under-relaxation for stability. Standard algorithm for steady incompressible flows. More robust than PISO for steady-state.",
+      "description": "Semi-Implicit Method for Pressure-Linked Equations. Iterative steady-state algorithm: solve momentum \u2192 solve pressure \u2192 correct velocity \u2192 repeat until convergence. Requires under-relaxation for stability. Standard algorithm for steady incompressible flows. More robust than PISO for steady-state.",
       "category": "solver",
       "parameters": [
         {
@@ -17153,7 +17153,7 @@
     },
     {
       "name": "surfaceNormalFixedValue",
-      "description": "Fixed value in surface normal direction only. Specifies magnitude of velocity component normal to surface: U·n = refValue. Tangential components zero gradient. Used for uniform inflow perpendicular to curved surfaces.",
+      "description": "Fixed value in surface normal direction only. Specifies magnitude of velocity component normal to surface: U\u00b7n = refValue. Tangential components zero gradient. Used for uniform inflow perpendicular to curved surfaces.",
       "category": "boundary",
       "parameters": [
         {
@@ -17925,7 +17925,7 @@
     },
     {
       "name": "totalPressure",
-      "description": "Boundary condition specifying total (stagnation) pressure: p_total = p_static + 0.5*ρ*|U|². Used at inlets/outlets where total pressure is known. The static pressure is calculated from total pressure minus dynamic pressure. Essential for compressible flows and fan boundaries.",
+      "description": "Boundary condition specifying total (stagnation) pressure: p_total = p_static + 0.5*\u03c1*|U|\u00b2. Used at inlets/outlets where total pressure is known. The static pressure is calculated from total pressure minus dynamic pressure. Essential for compressible flows and fan boundaries.",
       "category": "boundary",
       "parameters": [
         {
@@ -18286,7 +18286,7 @@
     },
     {
       "name": "turbulentIntensityKineticEnergyInlet",
-      "description": "Calculates turbulent kinetic energy (k) from turbulence intensity and mean velocity: k = 1.5*(I*|U|)², where I is intensity (typically 0.01-0.1). Simplifies turbulence specification at inlets when intensity is known from experiments or empirical data.",
+      "description": "Calculates turbulent kinetic energy (k) from turbulence intensity and mean velocity: k = 1.5*(I*|U|)\u00b2, where I is intensity (typically 0.01-0.1). Simplifies turbulence specification at inlets when intensity is known from experiments or empirical data.",
       "category": "boundary",
       "parameters": [
         {
@@ -18314,7 +18314,7 @@
     },
     {
       "name": "turbulentMixingLengthDissipationRateInlet",
-      "description": "Calculates turbulent dissipation rate (ε) from mixing length: ε = C_μ^(3/4) * k^(3/2) / l_m. The mixing length typically scales with geometry (e.g., 0.07*hydraulic_diameter). Used with turbulentIntensityKineticEnergyInlet for complete turbulence inlet specification.",
+      "description": "Calculates turbulent dissipation rate (\u03b5) from mixing length: \u03b5 = C_\u03bc^(3/4) * k^(3/2) / l_m. The mixing length typically scales with geometry (e.g., 0.07*hydraulic_diameter). Used with turbulentIntensityKineticEnergyInlet for complete turbulence inlet specification.",
       "category": "boundary",
       "parameters": [
         {
@@ -18778,7 +18778,7 @@
     },
     {
       "name": "upwind",
-      "description": "First-order upwind scheme. Uses upwind cell value: ϕ_f = ϕ_upwind. Guarantees boundedness but highly diffusive. Suitable for initial simulations or highly convection-dominated flows. Taylor series shows it adds artificial diffusion proportional to u*Δx/2, smearing sharp gradients.",
+      "description": "First-order upwind scheme. Uses upwind cell value: \u03d5_f = \u03d5_upwind. Guarantees boundedness but highly diffusive. Suitable for initial simulations or highly convection-dominated flows. Taylor series shows it adds artificial diffusion proportional to u*\u0394x/2, smearing sharp gradients.",
       "category": "scheme",
       "examples": [
         "div(phi,U)      Gauss upwind;"
@@ -19045,14 +19045,14 @@
     },
     {
       "name": "variableHeightFlowRate",
-      "description": "Velocity inlet maintaining specified volumetric flow rate with variable liquid height. Used in VOF simulations with partially filled inlets. Adjusts velocity based on liquid fraction to maintain constant Q = U*A*α.",
+      "description": "Velocity inlet maintaining specified volumetric flow rate with variable liquid height. Used in VOF simulations with partially filled inlets. Adjusts velocity based on liquid fraction to maintain constant Q = U*A*\u03b1.",
       "category": "boundary",
       "parameters": [
         {
           "name": "flowRate",
           "type": "scalar",
           "required": true,
-          "description": "Target volumetric flow rate (m³/s)"
+          "description": "Target volumetric flow rate (m\u00b3/s)"
         },
         {
           "name": "alpha",
@@ -20207,7 +20207,7 @@
     },
     {
       "name": "zeroGradient",
-      "description": "Applies a zero-gradient condition from the patch internal field onto the patch faces. The normal gradient at the boundary is zero: ∂ϕ/∂n = 0. Commonly used at outlets, symmetry planes, and walls for pressure. The patch value equals the adjacent cell value.",
+      "description": "Applies a zero-gradient condition from the patch internal field onto the patch faces. The normal gradient at the boundary is zero: \u2202\u03d5/\u2202n = 0. Commonly used at outlets, symmetry planes, and walls for pressure. The patch value equals the adjacent cell value.",
       "category": "boundary",
       "examples": [
         "type            zeroGradient;"
@@ -20326,6 +20326,224 @@
       "description": "OpenFOAM dictionary keyword (found in source)",
       "category": "other",
       "sourceFile": "src/atmosphericModels/derivedFvPatchFields/atmBoundaryLayer/atmBoundaryLayer.C"
+    },
+    {
+      "name": "atmBoundaryLayerInletVelocity",
+      "description": "Atmospheric boundary layer inlet velocity profile. Sets log-law velocity profile for wind: U = (u*/\u03ba) * ln((z-d+z0)/z0). Used for atmospheric flow simulations with neutral equilibrium ABL.",
+      "category": "boundary",
+      "parameters": [
+        {
+          "name": "flowDir",
+          "type": "vector",
+          "required": true,
+          "description": "Flow direction vector (e.g., (1 0 0) for x-direction wind)"
+        },
+        {
+          "name": "zDir",
+          "type": "vector",
+          "required": true,
+          "description": "Ground-normal direction vector (e.g., (0 0 1) for z-up)"
+        },
+        {
+          "name": "Uref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference mean streamwise wind speed at z_ref [m/s]"
+        },
+        {
+          "name": "Zref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference height for velocity profile [m]"
+        },
+        {
+          "name": "z0",
+          "type": "scalarField",
+          "required": true,
+          "description": "Aerodynamic roughness length [m] - depends on terrain (0.0002 smooth, 0.03 grass, 0.5 forest)"
+        },
+        {
+          "name": "d",
+          "type": "scalarField",
+          "required": true,
+          "description": "Ground-normal displacement height [m] - relevant for flows over forests/cities"
+        },
+        {
+          "name": "kappa",
+          "type": "scalar",
+          "required": false,
+          "description": "von K\u00e1rm\u00e1n constant (default: 0.41)"
+        },
+        {
+          "name": "Cmu",
+          "type": "scalar",
+          "required": false,
+          "description": "Empirical turbulence model constant (default: 0.09)"
+        },
+        {
+          "name": "initABL",
+          "type": "bool",
+          "required": false,
+          "description": "Initialize with theoretical ABL profile (default: true)"
+        }
+      ],
+      "examples": [
+        "type            atmBoundaryLayerInletVelocity;\nflowDir         (1 0 0);\nzDir            (0 0 1);\nUref            10.0;\nZref            20.0;\nz0              uniform 0.1;\nd               uniform 0.0;"
+      ],
+      "sourceFile": "src/atmosphericModels/derivedFvPatchFields/atmBoundaryLayerInletVelocity/"
+    },
+    {
+      "name": "atmBoundaryLayerInletK",
+      "description": "Atmospheric boundary layer inlet turbulent kinetic energy (k) profile. Sets TKE using: k = (u*\u00b2/\u221aC\u03bc) * \u221a(C1*ln((z-d+z0)/z0) + C2). Ensures consistent atmospheric turbulence profiles.",
+      "category": "boundary",
+      "parameters": [
+        {
+          "name": "flowDir",
+          "type": "vector",
+          "required": true,
+          "description": "Flow direction vector"
+        },
+        {
+          "name": "zDir",
+          "type": "vector",
+          "required": true,
+          "description": "Ground-normal direction vector"
+        },
+        {
+          "name": "Uref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference wind speed [m/s]"
+        },
+        {
+          "name": "Zref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference height [m]"
+        },
+        {
+          "name": "z0",
+          "type": "scalarField",
+          "required": true,
+          "description": "Surface roughness length [m]"
+        },
+        {
+          "name": "d",
+          "type": "scalarField",
+          "required": true,
+          "description": "Displacement height [m]"
+        },
+        {
+          "name": "C1",
+          "type": "scalar",
+          "required": false,
+          "description": "Curve-fitting coefficient for YGCJ profiles (default: 0.0)"
+        },
+        {
+          "name": "C2",
+          "type": "scalar",
+          "required": false,
+          "description": "Curve-fitting coefficient for YGCJ profiles (default: 1.0)"
+        }
+      ],
+      "examples": [
+        "type            atmBoundaryLayerInletK;\nflowDir         (1 0 0);\nzDir            (0 0 1);\nUref            10.0;\nZref            20.0;\nz0              uniform 0.1;\nd               uniform 0.0;"
+      ],
+      "sourceFile": "src/atmosphericModels/derivedFvPatchFields/atmBoundaryLayerInletK/"
+    },
+    {
+      "name": "atmBoundaryLayerInletEpsilon",
+      "description": "Atmospheric boundary layer inlet turbulent dissipation rate (\u03b5) profile. Sets dissipation using: \u03b5 = (u*\u00b3)/(\u03ba(z-d+z0)) * \u221a(C1*ln((z-d+z0)/z0) + C2). For k-\u03b5 turbulence models in atmospheric flows.",
+      "category": "boundary",
+      "parameters": [
+        {
+          "name": "flowDir",
+          "type": "vector",
+          "required": true,
+          "description": "Flow direction vector"
+        },
+        {
+          "name": "zDir",
+          "type": "vector",
+          "required": true,
+          "description": "Ground-normal direction vector"
+        },
+        {
+          "name": "Uref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference wind speed [m/s]"
+        },
+        {
+          "name": "Zref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference height [m]"
+        },
+        {
+          "name": "z0",
+          "type": "scalarField",
+          "required": true,
+          "description": "Surface roughness length [m]"
+        },
+        {
+          "name": "d",
+          "type": "scalarField",
+          "required": true,
+          "description": "Displacement height [m]"
+        }
+      ],
+      "examples": [
+        "type            atmBoundaryLayerInletEpsilon;\nflowDir         (1 0 0);\nzDir            (0 0 1);\nUref            10.0;\nZref            20.0;\nz0              uniform 0.1;\nd               uniform 0.0;"
+      ],
+      "sourceFile": "src/atmosphericModels/derivedFvPatchFields/atmBoundaryLayerInletEpsilon/"
+    },
+    {
+      "name": "atmBoundaryLayerInletOmega",
+      "description": "Atmospheric boundary layer inlet specific dissipation rate (\u03c9) profile. Sets omega using: \u03c9 = u*/(\u03ba\u221aC\u03bc(z-d+z0)). For k-\u03c9 SST turbulence models in atmospheric flows.",
+      "category": "boundary",
+      "parameters": [
+        {
+          "name": "flowDir",
+          "type": "vector",
+          "required": true,
+          "description": "Flow direction vector"
+        },
+        {
+          "name": "zDir",
+          "type": "vector",
+          "required": true,
+          "description": "Ground-normal direction vector"
+        },
+        {
+          "name": "Uref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference wind speed [m/s]"
+        },
+        {
+          "name": "Zref",
+          "type": "scalar",
+          "required": true,
+          "description": "Reference height [m]"
+        },
+        {
+          "name": "z0",
+          "type": "scalarField",
+          "required": true,
+          "description": "Surface roughness length [m]"
+        },
+        {
+          "name": "d",
+          "type": "scalarField",
+          "required": true,
+          "description": "Displacement height [m]"
+        }
+      ],
+      "examples": [
+        "type            atmBoundaryLayerInletOmega;\nflowDir         (1 0 0);\nzDir            (0 0 1);\nUref            10.0;\nZref            20.0;\nz0              uniform 0.1;\nd               uniform 0.0;"
+      ],
+      "sourceFile": "src/atmosphericModels/derivedFvPatchFields/atmBoundaryLayerInletOmega/"
     }
   ]
 }

@@ -7,7 +7,6 @@
 \*---------------------------------------------------------------------------*/
 FoamFile
 {
-    version     2.0;
     format      ascii;
     class       dictionary;
     location    "system";
@@ -15,51 +14,44 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-// Time derivative schemes
 ddtSchemes
 {
-    default         steadyState;
+    default         Euler;
 }
 
-// Gradient schemes
 gradSchemes
 {
     default         Gauss linear;
-    grad(U)         cellLimited Gauss linear 1;
 }
 
-// Divergence schemes
 divSchemes
 {
-    default         none;
-    div(phi,U)      bounded Gauss linearUpwind grad(U);
-    div(phi,k)      bounded Gauss upwind;
-    div(phi,epsilon) bounded Gauss upwind;
-    div((nuEff*dev2(T(grad(U))))) Gauss linear;
+    default             none;
+
+    div(rhoPhi,U)       Gauss linearUpwind grad(U);
+    div(tauDm)          Gauss linear;
+
+    div(phi,alpha)      Gauss vanLeer;
+
+    div(rhoPhi,k)       Gauss limitedLinear 1;
+    div(rhoPhi,epsilon) Gauss limitedLinear 1;
+
+    div(((rho*nuEff)*dev2(T(grad(U))))) Gauss linear;
 }
 
-// Laplacian schemes
 laplacianSchemes
 {
     default         Gauss linear corrected;
 }
 
-// Interpolation schemes
 interpolationSchemes
 {
     default         linear;
 }
 
-// Surface normal gradient schemes
 snGradSchemes
 {
     default         corrected;
-}
-
-// Wall distance calculation
-wallDist
-{
-    method          meshWave;
 }
 
 // ************************************************************************* //

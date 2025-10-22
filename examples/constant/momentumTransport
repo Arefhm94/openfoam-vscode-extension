@@ -7,47 +7,25 @@
 \*---------------------------------------------------------------------------*/
 FoamFile
 {
-    version     2.0;
     format      ascii;
-    class       volVectorField;
-    location    "0";
-    object      U;
+    class       dictionary;
+    location    "constant";
+    object      momentumTransport;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-dimensions      [0 1 -1 0 0 0 0];
+simulationType  RAS;
 
-internalField   uniform (0 0 0);
-
-boundaryField
+RAS
 {
-    inlet
-    {
-        type            fixedValue;
-        value           uniform (1 0 0);
-    }
+    model    buoyantKEpsilon;
 
-    outlet
-    {
-        type            zeroGradient;
-    }
+    turbulence      on;
 
-    walls
+    buoyantKEpsilonCoeffs
     {
-        type            noSlip;
+        Cg      0.85;
     }
-
-    symmetry
-    {
-        type            symmetry;
-    }
-
-    frontAndBack
-    {
-        type            empty;
-    }
-    
-    
 }
 
 // ************************************************************************* //

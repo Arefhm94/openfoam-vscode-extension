@@ -1,0 +1,66 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  13
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      epsilon;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 2 -3 0 0 0 0];
+
+internalField   uniform 0.01;
+
+boundaryField
+{
+    inlet
+    {
+        // Atmospheric boundary layer turbulent dissipation rate profile
+        // For use with k-epsilon turbulence models
+        type            atmBoundaryLayerInletEpsilon;
+        
+        flowDir         (1 0 0);
+        zDir            (0 0 1);
+        Uref            10.0;
+        Zref            20.0;
+        z0              uniform 0.1;
+        d               uniform 0.0;
+        
+        kappa           0.41;
+        Cmu             0.09;
+        initABL         true;
+    }
+
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform 0.01;
+        value           uniform 0.01;
+    }
+
+    ground
+    {
+        type            epsilonWallFunction;
+        value           uniform 0.01;
+    }
+
+    top
+    {
+        type            slip;
+    }
+
+    sides
+    {
+        type            symmetry;
+    }
+}
+
+// ************************************************************************* //

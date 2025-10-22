@@ -98,7 +98,7 @@
       "patterns": [
         {
           "name": "keyword.other.boundary.openfoam",
-          "match": "\\b(type|patch|wall|symmetry|empty|wedge|cyclic|cyclicAMI|processor|fixedValue|zeroGradient|calculated|fixedGradient|mixed|inletOutlet|pressureInletOutletVelocity|totalPressure|freestreamPressure|slip|noSlip|movingWallVelocity|uniformFixedValue|timeVaryingMappedFixedValue)\\b"
+          "match": "\\b(type|patch|wall|symmetry|empty|wedge|cyclic|cyclicAMI|processor|fixedValue|zeroGradient|calculated|fixedGradient|mixed|inletOutlet|pressureInletOutletVelocity|totalPressure|freestreamPressure|slip|noSlip|movingWallVelocity|uniformFixedValue|timeVaryingMappedFixedValue|atmBoundaryLayerInletVelocity|atmBoundaryLayerInletK|atmBoundaryLayerInletEpsilon|atmBoundaryLayerInletOmega|atmBoundaryLayer|flowDir|zDir|Uref|Zref|z0|kappa|Cmu|initABL)\\b"
         }
       ]
     },
