@@ -1,9 +1,9 @@
 {
   "name": "openfoam-language-support",
-  "displayName": "OpenFOAM Language Support",
+  "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
   "version": "0.1.0",
-  "publisher": "openfoam",
+  "publisher": "arefhm94",
   "repository": {
     "type": "git",
     "url": "https://github.com/Arefhm94/openfoam-vscode-extension.git"
