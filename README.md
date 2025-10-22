@@ -45,7 +45,7 @@ Automatically recognizes OpenFOAM files in:
 - Time directories (`0/`, `1/`, `0.5/`, etc.)
 - Files without extensions (U, p, k, epsilon, etc.)
 
-## 🚀 Installation
+## 🚀 Development
 
 ### Quick Install (Recommended)
 
@@ -77,19 +77,11 @@ code --install-extension openfoam-language-support-0.4.0.vsix
 
 ### Outline View Example
 
-```text
-📁 FoamFile
-📁 ddtSchemes
-  📄 default: Euler
-📁 gradSchemes
-  📄 default: Gauss linear
-📁 divSchemes
-  📄 div(rhoPhi,U): Gauss upwind
-📁 laplacianSchemes
-  📄 default: Gauss linear corrected
-```
+![alt text](image-1.png)
 
 ### Workflow Panel Example
+
+Activate by ctrl+shift+p and selecting "OpenFOAM: Open Case Workflow"
 
 ![alt text](image.png)
 
