@@ -3,6 +3,7 @@
 src/**
 .gitignore
 .vscodeignore
+.trunk/**
 **/*.map
 **/tsconfig.json
 **/.eslintrc.json

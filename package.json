@@ -63,8 +63,27 @@
       {
         "command": "openfoam.refreshKeywordDB",
         "title": "OpenFOAM: Refresh Keyword Database"
+      },
+      {
+        "command": "openfoam.setLanguageMode",
+        "title": "OpenFOAM: Set Language Mode"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "OpenFOAM",
+      "properties": {
+        "openfoam.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the OpenFOAM language server."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
