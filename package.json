@@ -131,6 +131,11 @@
         "command": "openfoam.refreshCaseTree",
         "title": "OpenFOAM: Refresh Case Explorer",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "openfoam.previewGeometry",
+        "title": "OpenFOAM: Preview Geometry (3D)",
+        "icon": "$(eye)"
       }
     ],
     "viewsContainers": {

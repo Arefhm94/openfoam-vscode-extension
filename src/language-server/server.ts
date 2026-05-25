@@ -11,12 +11,17 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as path from "path";
 import { findCaseRoot, resolveInclude, resolveVariable, uriToPath } from './caseContext';
+import {
+  scanCaseGeometry, getSurfaceNames, getSurfaceFilenames,
+  getFeatureEdgeMeshNames, getBoundaryPatchNames, getSTLRegionsForSurface,
+  getSTLStats, getPatchInfoList,
+} from './caseGeometryScanner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type OpenFOAMFileType =
   | "fvSchemes" | "fvSolution" | "controlDict" | "blockMeshDict"
-  | "snappyHexMeshDict" | "decomposeParDict" | "turbulenceProperties"
+  | "snappyHexMeshDict" | "helyxHexMeshDict" | "decomposeParDict" | "turbulenceProperties"
   | "transportProperties" | "thermophysicalProperties" | "boundaryField"
   | "unknown";
 
@@ -892,6 +897,50 @@ class OpenFOAMLanguageServer {
       return { contents: { kind: MarkupKind.Markdown, value: `**$${word}** *(variable not found)*` } };
     }
 
+    // Surface name hover → STL/geometry statistics
+    const caseRootForGeo = findCaseRoot(doc.uri);
+    if (caseRootForGeo) {
+      const geo = scanCaseGeometry(caseRootForGeo);
+      const surf = geo.surfaces.find(
+        s => s.name === word || s.filename === word
+      );
+      if (surf) {
+        const stats = getSTLStats(surf.filePath);
+        if (stats) {
+          const sizeKB = (stats.fileSizeBytes / 1024).toFixed(1);
+          const solidsStr = stats.solids.length
+            ? stats.solids.map(s => `\`${s}\``).join(', ')
+            : '*(unnamed)*';
+          let md = `**${surf.filename}** — ${stats.format.toUpperCase()} STL`;
+          md += `\n\n| | |\n|---|---|\n`;
+          md += `| Triangles | ${stats.triangleCount.toLocaleString()} |\n`;
+          md += `| File size | ${sizeKB} KB |\n`;
+          if (stats.solids.length) md += `| Solids | ${solidsStr} |\n`;
+          if (stats.bbox) {
+            const b = stats.bbox;
+            const fmt = (v: number) => v.toFixed(3);
+            md += `\n**Bounding box:**\n`;
+            md += `\`\`\`\nx  ${fmt(b.xMin)} → ${fmt(b.xMax)}  (Δ ${fmt(b.xMax - b.xMin)})\n`;
+            md += `y  ${fmt(b.yMin)} → ${fmt(b.yMax)}  (Δ ${fmt(b.yMax - b.yMin)})\n`;
+            md += `z  ${fmt(b.zMin)} → ${fmt(b.zMax)}  (Δ ${fmt(b.zMax - b.zMin)})\n\`\`\``;
+          }
+          return { contents: { kind: MarkupKind.Markdown, value: md } };
+        }
+      }
+
+      // Patch name hover → nFaces, type, startFace
+      const patches = getPatchInfoList(caseRootForGeo);
+      const patch = patches.find(p => p.name === word);
+      if (patch) {
+        let md = `**${patch.name}** — boundary patch\n\n`;
+        md += `| | |\n|---|---|\n`;
+        md += `| Type | \`${patch.type}\` |\n`;
+        md += `| nFaces | ${patch.nFaces.toLocaleString()} |\n`;
+        md += `| startFace | ${patch.startFace.toLocaleString()} |\n`;
+        return { contents: { kind: MarkupKind.Markdown, value: md } };
+      }
+    }
+
     const md = this.lookupHover(word, doc);
     if (!md) return null;
     return { contents: { kind: MarkupKind.Markdown, value: md } };
@@ -984,6 +1033,16 @@ class OpenFOAMLanguageServer {
     const doc = this.docs.get(params.textDocument.uri);
     if (!doc || !this.db) return [];
 
+    // #include path completions
+    const lineText = doc.getText({
+      start: { line: params.position.line, character: 0 },
+      end: { line: params.position.line, character: params.position.character },
+    });
+    const inclPartial = lineText.match(/#include\s+["<]([^">]*)$/);
+    if (inclPartial) {
+      return this.includePathCompletions(inclPartial[1], doc.uri);
+    }
+
     const ctx = this.getCursorContext(doc, params.position);
     const items: CompletionItem[] = [];
 
@@ -1061,6 +1120,23 @@ class OpenFOAMLanguageServer {
       if (ctx.currentKey === 'type' || sub === 'type') {
         for (const [n, bc] of Object.entries(this.db.boundaryConditions || {}))
           items.push({ label: n, kind: CompletionItemKind.Class, detail: bc.brief });
+      } else if (!top || top === 'boundaryField') {
+        // At depth 0 inside boundaryField → offer patch names from polyMesh/boundary
+        const caseRoot = findCaseRoot(doc.uri);
+        if (caseRoot) {
+          for (const patch of getBoundaryPatchNames(caseRoot)) {
+            items.push({
+              label: patch,
+              kind: CompletionItemKind.Variable,
+              detail: 'patch (from polyMesh/boundary)',
+              sortText: '!!patch_' + patch,
+              insertText: `${patch}\n{\n    type            \${1:fixedValue};\n    value           \${2:uniform 0};\n}\n`,
+              insertTextFormat: 2,
+            });
+          }
+        }
+        items.push({ label: 'type', kind: CompletionItemKind.Property, insertText: 'type            $1;', insertTextFormat: 2 });
+        items.push({ label: 'value', kind: CompletionItemKind.Property, insertText: 'value           ${1|uniform,nonuniform|} $2;', insertTextFormat: 2 });
       } else {
         items.push({ label: 'type', kind: CompletionItemKind.Property, insertText: 'type            $1;', insertTextFormat: 2 });
         items.push({ label: 'value', kind: CompletionItemKind.Property, insertText: 'value           ${1|uniform,nonuniform|} $2;', insertTextFormat: 2 });
@@ -1069,8 +1145,9 @@ class OpenFOAMLanguageServer {
       addKeywords(this.db.blockMesh || {});
     } else if (ctx.fileType === 'decomposeParDict') {
       addKeywords(this.db.decomposePar || {});
-    } else if (ctx.fileType === 'snappyHexMeshDict') {
-      addKeywords(this.db.snappyHexMesh || {});
+    } else if (ctx.fileType === 'snappyHexMeshDict' || ctx.fileType === 'helyxHexMeshDict') {
+      const caseRoot = findCaseRoot(doc.uri);
+      this.addSnappyCompletions(items, ctx.blockPath, ctx.cursorIn, ctx.currentKey, caseRoot, doc.uri);
     } else {
       // General: offer everything
       for (const cat of Object.values(BLOCK_TO_SCHEME)) addSchemes(cat);
@@ -1078,6 +1155,124 @@ class OpenFOAMLanguageServer {
     }
 
     return items;
+  }
+
+  // ── Geometry-aware completions for snappyHexMeshDict / helyxHexMeshDict ────
+  private addSnappyCompletions(
+    items: CompletionItem[],
+    blockPath: string[],
+    cursorIn: 'key' | 'value',
+    currentKey: string,
+    caseRoot: string | null,
+    docUri: string,
+  ) {
+    const top = blockPath[0] || '';
+    const sub = blockPath[1] || '';
+    const deep = blockPath[2] || '';
+
+    // Helper to push a filesystem-sourced item with higher sort priority
+    const pushGeo = (label: string, detail: string, insertText: string, kind: CompletionItemKind) => {
+      items.push({ label, kind, detail, sortText: '!!' + label, insertText, insertTextFormat: 2 });
+    };
+
+    if (caseRoot) {
+      const geo = scanCaseGeometry(caseRoot);
+
+      // ── geometry block (top level) ────────────────────────────────────────
+      // User is naming a surface entry: "myGeometry.stl { ... }"
+      if (top === 'geometry' && !sub && cursorIn === 'key') {
+        for (const surf of geo.surfaces) {
+          pushGeo(
+            surf.filename,
+            `surface file in constant/triSurface/`,
+            `${surf.filename}\n{\n    type    triSurfaceMesh;\n    name    ${surf.name};\n}\n`,
+            CompletionItemKind.File,
+          );
+        }
+        return;
+      }
+
+      // ── geometry.<surface>.regions (named solid regions inside an STL) ───
+      if (top === 'geometry' && sub && deep === 'regions' && cursorIn === 'key') {
+        const regions = getSTLRegionsForSurface(caseRoot, sub);
+        for (const region of regions) {
+          pushGeo(
+            region,
+            `solid region in ${sub}`,
+            `${region}\n{\n    name    ${region};\n}\n`,
+            CompletionItemKind.Variable,
+          );
+        }
+        return;
+      }
+
+      // ── castellatedMeshControls.features[].file ───────────────────────────
+      if (top === 'castellatedMeshControls' && sub === 'features' && cursorIn === 'value' && currentKey === 'file') {
+        for (const eMesh of geo.featureEdgeMeshes) {
+          pushGeo(`"${eMesh}"`, 'feature edge mesh', `"${eMesh}"`, CompletionItemKind.File);
+        }
+        return;
+      }
+
+      // ── castellatedMeshControls.refinementSurfaces (block key) ──────────
+      if (top === 'castellatedMeshControls' && sub === 'refinementSurfaces' && !deep && cursorIn === 'key') {
+        for (const name of getSurfaceNames(caseRoot)) {
+          pushGeo(
+            name,
+            'surface from geometry block',
+            `${name}\n{\n    level   (\${1:0} \${2:0});\n}\n`,
+            CompletionItemKind.Variable,
+          );
+        }
+        return;
+      }
+
+      // ── castellatedMeshControls.refinementRegions (block key) ───────────
+      if (top === 'castellatedMeshControls' && sub === 'refinementRegions' && !deep && cursorIn === 'key') {
+        for (const name of getSurfaceNames(caseRoot)) {
+          pushGeo(
+            name,
+            'surface from geometry block',
+            `${name}\n{\n    mode    inside;\n    levels  ((\${1:1e15} \${2:0}));\n}\n`,
+            CompletionItemKind.Variable,
+          );
+        }
+        return;
+      }
+
+      // ── addLayersControls.layers (block key) = patch names ───────────────
+      if (top === 'addLayersControls' && sub === 'layers' && !deep && cursorIn === 'key') {
+        for (const patch of getBoundaryPatchNames(caseRoot)) {
+          pushGeo(
+            patch,
+            'patch from polyMesh/boundary',
+            `${patch}\n{\n    nSurfaceLayers  \${1:3};\n}\n`,
+            CompletionItemKind.Variable,
+          );
+        }
+        // Also offer surface names (layers can reference surface names too)
+        for (const name of getSurfaceNames(caseRoot)) {
+          items.push({
+            label: name,
+            kind: CompletionItemKind.File,
+            detail: 'surface name',
+            sortText: '!!' + name,
+          });
+        }
+        return;
+      }
+    }
+
+    // ── Default: fall back to static snappyHexMesh keywords ─────────────────
+    for (const [kw, info] of Object.entries(this.db.snappyHexMesh || {})) {
+      items.push({
+        label: kw,
+        kind: CompletionItemKind.Property,
+        detail: (info as FieldSpec).description || '',
+        insertText: this.fieldSnippet(kw, info as FieldSpec),
+        insertTextFormat: 2,
+      });
+    }
   }
 
   private schemeSnippet(name: string, info: SchemeInfo): string {
@@ -1191,6 +1386,7 @@ class OpenFOAMLanguageServer {
     if (ft === 'boundaryField') this.diagBoundaryField(doc, lines, diags);
     if (ft === 'blockMeshDict') this.diagBlockMesh(lines, diags);
     if (ft === 'decomposeParDict') this.diagDecomposePar(lines, diags);
+    if (ft === 'snappyHexMeshDict' || ft === 'helyxHexMeshDict') this.diagSnappyHexMesh(doc, text, lines, diags);
     this.diagIncludes(doc, lines, diags);
 
     return diags;
@@ -1365,6 +1561,38 @@ class OpenFOAMLanguageServer {
     return null;
   }
 
+  // ── #include path completions ─────────────────────────────────────────────
+  private includePathCompletions(partial: string, docUri: string): CompletionItem[] {
+    const items: CompletionItem[] = [];
+    const docDir = path.dirname(uriToPath(docUri));
+    const caseRoot = findCaseRoot(docUri);
+
+    const dirs = new Set<string>([docDir]);
+    if (caseRoot) {
+      dirs.add(path.join(caseRoot, 'system'));
+      dirs.add(caseRoot);
+    }
+
+    for (const dir of dirs) {
+      try {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (!entry.isFile()) continue;
+          const label = entry.name;
+          if (label.startsWith('.')) continue;
+          if (!items.find(i => i.label === label)) {
+            items.push({
+              label,
+              kind: CompletionItemKind.File,
+              detail: path.relative(docDir, path.join(dir, label)),
+              sortText: dir === docDir ? '0' + label : '1' + label,
+            });
+          }
+        }
+      } catch { /* skip */ }
+    }
+    return items;
+  }
+
   // ── Code Actions ─────────────────────────────────────────────────────────
   private onCodeAction(params: CodeActionParams): CodeAction[] {
     const doc = this.docs.get(params.textDocument.uri);
@@ -1396,10 +1624,126 @@ class OpenFOAMLanguageServer {
         });
       }
     }
+
+    // Context-aware code actions (not tied to diagnostics)
+    const ft = this.getFileType(doc);
+    if (ft === 'snappyHexMeshDict' || ft === 'helyxHexMeshDict') {
+      const caseRoot = findCaseRoot(doc.uri);
+      if (caseRoot) {
+        const text = doc.getText();
+        const lines = text.split('\n');
+        const cursorLine = params.range.start.line;
+
+        // Detect if cursor is inside an empty geometry {} block
+        const geoAction = this.generateGeometryBlockAction(doc, lines, cursorLine, caseRoot);
+        if (geoAction) actions.push(geoAction);
+
+        // Detect if cursor is inside an empty layers {} block under addLayersControls
+        const layersAction = this.generateLayersAction(doc, lines, cursorLine, caseRoot);
+        if (layersAction) actions.push(layersAction);
+      }
+    }
+
     return actions;
   }
 
-  // ── Document Formatting ───────────────────────────────────────────────────
+  private generateGeometryBlockAction(
+    doc: TextDocument, lines: string[], cursorLine: number, caseRoot: string
+  ): CodeAction | null {
+    let inGeom = false, depth = 0, blockStart = -1, blockEnd = -1;
+    for (let li = 0; li < lines.length; li++) {
+      const ln = lines[li].replace(/\/\/.*/, '').trim();
+      if (!inGeom && /^geometry\s*\{?/.test(ln)) {
+        inGeom = true; blockStart = li;
+        depth = ln.includes('{') ? 1 : 0;
+        continue;
+      }
+      if (!inGeom) continue;
+      for (const ch of ln) {
+        if (ch === '{') depth++;
+        if (ch === '}') depth--;
+      }
+      if (depth <= 0) { blockEnd = li; inGeom = false; break; }
+    }
+
+    if (blockStart < 0 || blockEnd < 0) return null;
+    if (cursorLine < blockStart || cursorLine > blockEnd) return null;
+
+    // Check if block is effectively empty
+    const blockContent = lines.slice(blockStart + 1, blockEnd).join('\n').replace(/\/\/[^\n]*/g, '').trim();
+    if (blockContent.replace(/[{}]/g, '').trim()) return null;
+
+    const geo = scanCaseGeometry(caseRoot);
+    if (!geo.surfaces.length) return null;
+
+    let insertText = '';
+    for (const surf of geo.surfaces) {
+      insertText += `    ${surf.filename}\n    {\n        type    triSurfaceMesh;\n        name    ${surf.name};\n    }\n`;
+    }
+
+    const insertLine = blockStart + 1;
+    return {
+      title: 'Generate geometry block from triSurface files',
+      kind: CodeActionKind.Source,
+      edit: { changes: { [doc.uri]: [TextEdit.insert({ line: insertLine, character: 0 }, insertText)] } },
+    };
+  }
+
+  private generateLayersAction(
+    doc: TextDocument, lines: string[], cursorLine: number, caseRoot: string
+  ): CodeAction | null {
+    let inAddLayers = false, addDepth = 0;
+    let inLayers = false, layerDepth = 0, blockStart = -1, blockEnd = -1;
+
+    for (let li = 0; li < lines.length; li++) {
+      const ln = lines[li].replace(/\/\/.*/, '').trim();
+      if (!inAddLayers && /^addLayersControls\s*\{?/.test(ln)) {
+        inAddLayers = true; addDepth = ln.includes('{') ? 1 : 0; continue;
+      }
+      if (!inAddLayers) continue;
+      for (const ch of ln) {
+        if (ch === '{') addDepth++;
+        if (ch === '}') addDepth--;
+      }
+      if (addDepth <= 0) { inAddLayers = false; continue; }
+
+      if (!inLayers && /^layers\s*\{?/.test(ln)) {
+        inLayers = true; blockStart = li;
+        layerDepth = ln.includes('{') ? 1 : 0; continue;
+      }
+      if (!inLayers) continue;
+      for (const ch of ln) {
+        if (ch === '{') layerDepth++;
+        if (ch === '}') layerDepth--;
+      }
+      if (layerDepth <= 0) { blockEnd = li; inLayers = false; break; }
+    }
+
+    if (blockStart < 0 || blockEnd < 0) return null;
+    if (cursorLine < blockStart || cursorLine > blockEnd) return null;
+
+    const blockContent = lines.slice(blockStart + 1, blockEnd).join('\n').replace(/\/\/[^\n]*/g, '').trim();
+    if (blockContent.replace(/[{}]/g, '').trim()) return null;
+
+    const patches = getBoundaryPatchNames(caseRoot);
+    if (!patches.length) return null;
+
+    let insertText = '';
+    for (const patch of patches) {
+      insertText += `        ${patch}\n        {\n            nSurfaceLayers  3;\n        }\n`;
+    }
+
+    return {
+      title: 'Generate layers from boundary patches',
+      kind: CodeActionKind.Source,
+      edit: { changes: { [doc.uri]: [TextEdit.insert({ line: blockStart + 1, character: 0 }, insertText)] } },
+    };
+  }
+
+  private getFileType(doc: TextDocument): OpenFOAMFileType {
+    const ctx = this.getCursorContext(doc, { line: 0, character: 0 });
+    return ctx.fileType;
+  }
   private onDocumentFormatting(_params: DocumentFormattingParams): TextEdit[] {
     const doc = this.docs.get(_params.textDocument.uri);
     if (!doc) return [];
@@ -1550,7 +1894,229 @@ class OpenFOAMLanguageServer {
     }
   }
 
-  // ── blockMeshDict diagnostics ─────────────────────────────────────────────
+  // ── snappyHexMeshDict / helyxHexMeshDict diagnostics ─────────────────────
+  private diagSnappyHexMesh(doc: TextDocument, text: string, lines: string[], diags: Diagnostic[]) {
+    const caseRoot = findCaseRoot(doc.uri);
+    if (!caseRoot) return;
+
+    const geo = scanCaseGeometry(caseRoot);
+    const triSurfaceFiles = new Set(geo.surfaces.map(s => s.filename));
+    const triSurfaceNames = new Set(geo.surfaces.map(s => s.name));
+    const eMeshFiles      = new Set(geo.featureEdgeMeshes);
+    const patchNames      = new Set(geo.boundaryPatches);
+
+    // ── 1. Collect geometry block entries ────────────────────────────────────
+    // geometry { <surfaceName>.stl { ... } }
+    const declaredGeomNames = new Set<string>();
+    {
+      let inGeom = false, depth = 0;
+      for (let li = 0; li < lines.length; li++) {
+        const ln = stripComments(lines[li]).trim();
+        if (!inGeom && /^geometry\s*\{?/.test(ln)) { inGeom = true; depth = (ln.includes('{') ? 1 : 0); continue; }
+        if (!inGeom) continue;
+        for (const ch of ln) {
+          if (ch === '{') depth++;
+          if (ch === '}') depth--;
+        }
+        if (depth <= 0) { inGeom = false; continue; }
+        if (depth === 1) {
+          // A line at depth 1 inside geometry block is a surface declaration
+          const nameM = ln.match(/^([\w.]+)\s*(\{.*)?$/);
+          if (nameM) {
+            const entry = nameM[1];
+            declaredGeomNames.add(entry);
+            // If it ends with a known extension, also record the base name
+            const ext = path.extname(entry);
+            if (ext) declaredGeomNames.add(path.basename(entry, ext));
+
+            // Warn if the file doesn't exist in constant/triSurface/
+            if (triSurfaceFiles.size && ext && !triSurfaceFiles.has(entry)) {
+              diags.push({
+                range: { start: { line: li, character: 0 }, end: { line: li, character: lines[li].length } },
+                severity: DiagnosticSeverity.Warning,
+                message: `Geometry file '${entry}' not found in constant/triSurface/`,
+                source: 'openfoam',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Use geometry block names if populated, else fall back to filesystem names
+    const knownSurfaces = declaredGeomNames.size > 0 ? declaredGeomNames : triSurfaceNames;
+
+    // ── 2. Check features[].file values ─────────────────────────────────────
+    if (eMeshFiles.size) {
+      const featFileRe = /\bfile\s+"?([^";\s]+)"?\s*;/g;
+      let fm: RegExpExecArray | null;
+      while ((fm = featFileRe.exec(text)) !== null) {
+        const fname = fm[1];
+        if (!eMeshFiles.has(fname)) {
+          const lineIdx = doc.positionAt(fm.index).line;
+          diags.push({
+            range: { start: { line: lineIdx, character: 0 }, end: { line: lineIdx, character: lines[lineIdx]?.length ?? 0 } },
+            severity: DiagnosticSeverity.Error,
+            message: `Feature edge mesh '${fname}' not found in constant/triSurface/ or constant/extendedFeatureEdgeMesh/`,
+            source: 'openfoam',
+          });
+        }
+      }
+    }
+
+    // ── 3. Check refinementSurfaces and refinementRegions keys ───────────────
+    for (const blockName of ['refinementSurfaces', 'refinementRegions']) {
+      let inBlock = false, depth = 0;
+      for (let li = 0; li < lines.length; li++) {
+        const ln = stripComments(lines[li]).trim();
+        if (!inBlock && new RegExp(`^${blockName}\\s*\\{?`).test(ln)) {
+          inBlock = true; depth = (ln.includes('{') ? 1 : 0); continue;
+        }
+        if (!inBlock) continue;
+        for (const ch of ln) {
+          if (ch === '{') depth++;
+          if (ch === '}') depth--;
+        }
+        if (depth <= 0) { inBlock = false; continue; }
+        if (depth === 1) {
+          const nameM = ln.match(/^([\w.]+)\s*(\{.*)?$/);
+          if (nameM && knownSurfaces.size && !knownSurfaces.has(nameM[1])) {
+            diags.push({
+              range: { start: { line: li, character: 0 }, end: { line: li, character: lines[li].length } },
+              severity: DiagnosticSeverity.Warning,
+              message: `'${nameM[1]}' is not defined in the geometry block or constant/triSurface/`,
+              source: 'openfoam',
+            });
+          }
+        }
+      }
+    }
+
+    // ── 4. Check addLayersControls.layers keys against patch names ───────────
+    if (patchNames.size) {
+      let inLayers = false, depth = 0, inAddLayers = false, addDepth = 0;
+      for (let li = 0; li < lines.length; li++) {
+        const ln = stripComments(lines[li]).trim();
+
+        if (!inAddLayers && /^addLayersControls\s*\{?/.test(ln)) {
+          inAddLayers = true; addDepth = (ln.includes('{') ? 1 : 0); continue;
+        }
+        if (!inAddLayers) continue;
+        for (const ch of ln) { if (ch === '{') addDepth++; if (ch === '}') addDepth--; }
+        if (addDepth <= 0) { inAddLayers = false; continue; }
+
+        if (!inLayers && /^layers\s*\{?/.test(ln)) {
+          inLayers = true; depth = (ln.includes('{') ? 1 : 0); continue;
+        }
+        if (!inLayers) continue;
+        for (const ch of ln) {
+          if (ch === '{') depth++;
+          if (ch === '}') depth--;
+        }
+        if (depth <= 0) { inLayers = false; continue; }
+        if (depth === 1) {
+          const nameM = ln.match(/^([\w.]+)\s*(\{.*)?$/);
+          if (nameM) {
+            const candidate = nameM[1];
+            // Allow surface names too (snappy accepts both)
+            if (!patchNames.has(candidate) && !knownSurfaces.has(candidate)) {
+              diags.push({
+                range: { start: { line: li, character: 0 }, end: { line: li, character: lines[li].length } },
+                severity: DiagnosticSeverity.Warning,
+                message: `'${candidate}' is not a known patch in constant/polyMesh/boundary`,
+                source: 'openfoam',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // ── 5. locationInMesh must be present in castellatedMeshControls ─────────
+    {
+      let inCastell = false, depth = 0, hasLocation = false;
+      for (let li = 0; li < lines.length; li++) {
+        const ln = stripComments(lines[li]).trim();
+        if (!inCastell && /^castellatedMeshControls\s*\{?/.test(ln)) {
+          inCastell = true; depth = ln.includes('{') ? 1 : 0; continue;
+        }
+        if (!inCastell) continue;
+        for (const ch of ln) {
+          if (ch === '{') depth++;
+          if (ch === '}') depth--;
+        }
+        if (depth <= 0) { inCastell = false; continue; }
+        if (/\blocationInMesh\b/.test(ln)) hasLocation = true;
+      }
+      if (inCastell === false && !hasLocation) {
+        // Find the castellatedMeshControls line to attach the error
+        for (let li = 0; li < lines.length; li++) {
+          if (/^castellatedMeshControls\s*\{?/.test(stripComments(lines[li]).trim())) {
+            diags.push({
+              range: { start: { line: li, character: 0 }, end: { line: li, character: lines[li].length } },
+              severity: DiagnosticSeverity.Error,
+              message: 'castellatedMeshControls is missing required key: locationInMesh',
+              source: 'openfoam',
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // ── 6. Unreferenced geometry entries ─────────────────────────────────────
+    if (declaredGeomNames.size > 0) {
+      const textLower = text.toLowerCase();
+      const referencedNames = new Set<string>();
+      for (const blockName of ['refinementSurfaces', 'refinementRegions', 'features']) {
+        let inBlock = false, depth = 0;
+        for (const rawLine of lines) {
+          const ln = stripComments(rawLine).trim();
+          if (!inBlock && new RegExp(`^${blockName}\\s*\\{?`).test(ln)) {
+            inBlock = true; depth = ln.includes('{') ? 1 : 0; continue;
+          }
+          if (!inBlock) continue;
+          for (const ch of ln) {
+            if (ch === '{') depth++;
+            if (ch === '}') depth--;
+          }
+          if (depth <= 0) { inBlock = false; continue; }
+          if (depth === 1) {
+            const nameM = ln.match(/^([\w.]+)/);
+            if (nameM) referencedNames.add(nameM[1]);
+          }
+        }
+      }
+
+      // Check for geometry block entries that are never referenced
+      let inGeom = false, depth = 0;
+      for (let li = 0; li < lines.length; li++) {
+        const ln = stripComments(lines[li]).trim();
+        if (!inGeom && /^geometry\s*\{?/.test(ln)) { inGeom = true; depth = ln.includes('{') ? 1 : 0; continue; }
+        if (!inGeom) continue;
+        for (const ch of ln) {
+          if (ch === '{') depth++;
+          if (ch === '}') depth--;
+        }
+        if (depth <= 0) { inGeom = false; continue; }
+        if (depth === 1) {
+          const nameM = ln.match(/^([\w.]+)\s*(\{.*)?$/);
+          if (nameM) {
+            const entry = nameM[1];
+            const baseName = path.extname(entry) ? path.basename(entry, path.extname(entry)) : entry;
+            if (!referencedNames.has(entry) && !referencedNames.has(baseName)) {
+              diags.push({
+                range: { start: { line: li, character: 0 }, end: { line: li, character: lines[li].length } },
+                severity: DiagnosticSeverity.Hint,
+                message: `'${entry}' is declared in geometry but not referenced in refinementSurfaces, refinementRegions, or features`,
+                source: 'openfoam',
+              });
+            }
+          }
+        }
+      }
+    }
+  }
   private diagBlockMesh(lines: string[], diags: Diagnostic[]) {
     let vertexCount = 0;
     let inVerts = false, parenDepth = 0;
@@ -1643,6 +2209,7 @@ class OpenFOAMLanguageServer {
 const FT_MAP: Record<string, OpenFOAMFileType> = {
   fvSchemes: "fvSchemes", fvSolution: "fvSolution", controlDict: "controlDict",
   blockMeshDict: "blockMeshDict", snappyHexMeshDict: "snappyHexMeshDict",
+  helyxHexMeshDict: "helyxHexMeshDict",
   decomposeParDict: "decomposeParDict", turbulenceProperties: "turbulenceProperties",
   transportProperties: "transportProperties",
   thermophysicalProperties: "thermophysicalProperties",

@@ -178,6 +178,45 @@ export function activate(context: vscode.ExtensionContext) {
     () => caseTreeProvider.refresh(),
   );
 
+  // Preview geometry file (STL/OBJ) in the Inspector panel 3D viewer
+  const previewGeometryCommand = vscode.commands.registerCommand(
+    'openfoam.previewGeometry',
+    async (filePathOrUri?: vscode.Uri | string) => {
+      let filePath: string | undefined;
+      if (filePathOrUri instanceof vscode.Uri) {
+        filePath = filePathOrUri.fsPath;
+      } else if (typeof filePathOrUri === 'string') {
+        filePath = filePathOrUri;
+      } else {
+        // Try to infer from hover context — ask user to pick from triSurface
+        const caseRoots = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
+        const picks: vscode.QuickPickItem[] = [];
+        for (const root of caseRoots) {
+          const triSurfDir = path.join(root, 'constant', 'triSurface');
+          try {
+            const files = require('fs').readdirSync(triSurfDir);
+            for (const f of files) {
+              const ext = path.extname(f).toLowerCase();
+              if (['.stl', '.obj', '.vtk'].includes(ext)) {
+                picks.push({ label: f, description: triSurfDir });
+              }
+            }
+          } catch { /* */ }
+        }
+        if (!picks.length) {
+          vscode.window.showInformationMessage('No geometry files found in constant/triSurface/');
+          return;
+        }
+        const sel = await vscode.window.showQuickPick(picks, { placeHolder: 'Select geometry file to preview' });
+        if (!sel) return;
+        filePath = path.join(sel.description!, sel.label);
+      }
+      if (!filePath) return;
+      InspectorPanel.createOrShow(context.extensionUri, context);
+      InspectorPanel.currentPanel?.previewGeometry(filePath);
+    },
+  );
+
   // Format on save
   const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument(e => {
     const cfg = vscode.workspace.getConfiguration('openfoam');
@@ -271,6 +310,7 @@ export function activate(context: vscode.ExtensionContext) {
     autoDetectDisposable,
     caseTreeView,
     refreshCaseTreeCommand,
+    previewGeometryCommand,
     formatOnSaveDisposable,
   );
 

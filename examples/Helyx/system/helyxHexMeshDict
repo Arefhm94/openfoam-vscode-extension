@@ -43,7 +43,7 @@ geometry {
     onsite_bld.stl  { type triSurfaceMesh;name onsite_bld ;appendRegionName false;}    
     source_area.stl { type triSurfaceMesh;name source_area;appendRegionName false;}
     terrain.stl     { type triSurfaceMesh;name terrain    ;appendRegionName false;}
-    terrain_bld.stl { type triSurfaceMesh;name terrain_bld;appendRegionName false;}
+    
 }
 
 castellatedMeshControls {
