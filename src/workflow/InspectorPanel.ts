@@ -10,6 +10,7 @@ import {
 
 export class InspectorPanel {
   public static currentPanel: InspectorPanel | undefined;
+  private static _openedOnce = false;
 
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
@@ -23,7 +24,7 @@ export class InspectorPanel {
     context: vscode.ExtensionContext,
   ) {
     if (InspectorPanel.currentPanel) {
-      InspectorPanel.currentPanel._panel.reveal(vscode.ViewColumn.Beside, true);
+      InspectorPanel.currentPanel._panel.reveal(undefined, true);
       InspectorPanel.currentPanel._tryLoadActiveEditor();
       return;
     }
@@ -31,7 +32,7 @@ export class InspectorPanel {
     const panel = vscode.window.createWebviewPanel(
       "openfoamInspector",
       "∇",
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      { viewColumn: vscode.ViewColumn.Active, preserveFocus: true },
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -40,6 +41,25 @@ export class InspectorPanel {
     );
 
     InspectorPanel.currentPanel = new InspectorPanel(panel, extensionUri, context);
+    InspectorPanel.currentPanel._openInBottomGroupOnce().then(
+      () => {
+        InspectorPanel.currentPanel?._panel.reveal(undefined, true);
+      },
+      () => {
+        // Best-effort positioning only.
+      },
+    );
+  }
+
+  private async _openInBottomGroupOnce() {
+    if (InspectorPanel._openedOnce) return;
+    InspectorPanel._openedOnce = true;
+    try {
+      this._panel.reveal(undefined, false);
+      await vscode.commands.executeCommand("workbench.action.moveEditorToBelowGroup");
+    } catch {
+      // Keep current placement when command is unavailable.
+    }
   }
 
   private constructor(
@@ -197,7 +217,7 @@ export class InspectorPanel {
 
   /** Load an STL/OBJ file into the inline 3D viewer. Called from extension.ts command. */
   public previewGeometry(filePath: string) {
-    this._panel.reveal(vscode.ViewColumn.Beside, true);
+    this._panel.reveal(undefined, true);
     try {
       const buf = fs.readFileSync(filePath);
       const headerStr = buf.slice(0, 6).toString('ascii').toLowerCase();

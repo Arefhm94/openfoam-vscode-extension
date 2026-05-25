@@ -13,10 +13,12 @@ let camera: THREE.PerspectiveCamera | null = null;
 let renderer: THREE.WebGLRenderer | null = null;
 let mesh: THREE.Mesh | null = null;
 let ready = false;
+const target = new THREE.Vector3(0, 0, 0);
 
 // Z-up spherical orbit: phi=polar from Z, theta=azimuth
 let sph = { theta: Math.PI / 4, phi: Math.PI / 3, r: 3 };
 let isDown = false, lx = 0, ly = 0;
+let dragMode: 'rotate' | 'pan' = 'rotate';
 
 function updateCamera() {
   if (!camera) return;
@@ -25,8 +27,19 @@ function updateCamera() {
     sph.r * Math.sin(sph.phi) * Math.sin(sph.theta),
     sph.r * Math.cos(sph.phi),
   );
+  camera.position.add(target);
   camera.up.set(0, 0, 1);
-  camera.lookAt(0, 0, 0);
+  camera.lookAt(target);
+}
+
+function panCamera(dx: number, dy: number) {
+  if (!camera) return;
+  const toTarget = target.clone().sub(camera.position).normalize();
+  const right = toTarget.clone().cross(camera.up).normalize();
+  const up = camera.up.clone().normalize();
+  const panScale = Math.max(0.001, sph.r * 0.0018);
+  const pan = right.multiplyScalar(-dx * panScale).add(up.multiplyScalar(dy * panScale));
+  target.add(pan);
 }
 
 function init() {
@@ -52,12 +65,24 @@ function init() {
   d2.position.set(-5, -4, -3);
   scene.add(d2);
 
-  geoCanvas.addEventListener('mousedown', e => { isDown = true; lx = e.clientX; ly = e.clientY; });
+  geoCanvas.addEventListener('contextmenu', e => e.preventDefault());
+  geoCanvas.addEventListener('mousedown', e => {
+    isDown = true;
+    lx = e.clientX;
+    ly = e.clientY;
+    dragMode = (e.button === 2 || e.shiftKey) ? 'pan' : 'rotate';
+  });
   window.addEventListener('mouseup', () => isDown = false);
   window.addEventListener('mousemove', e => {
     if (!isDown) return;
-    sph.theta -= (e.clientX - lx) * 0.01;
-    sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + (e.clientY - ly) * 0.01));
+    const dx = e.clientX - lx;
+    const dy = e.clientY - ly;
+    if (dragMode === 'pan') {
+      panCamera(dx, dy);
+    } else {
+      sph.theta -= dx * 0.01;
+      sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + dy * 0.01));
+    }
     lx = e.clientX; ly = e.clientY;
     updateCamera();
   });
@@ -243,7 +268,7 @@ window.addEventListener('message', (ev: MessageEvent) => {
       mesh = new THREE.Mesh(geo, mat);
       scene!.add(mesh);
       const triCount = geo.attributes.position.count / 3;
-      geoLabel.textContent = msg.fileName + ' — ' + triCount.toLocaleString() + ' tri  |  drag to rotate  |  scroll to zoom';
+      geoLabel.textContent = msg.fileName + ' — ' + triCount.toLocaleString() + ' tri  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom';
     } catch (err: any) {
       geoLabel.textContent = 'Parse error: ' + err.message;
     }

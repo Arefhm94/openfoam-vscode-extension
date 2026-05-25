@@ -3080,8 +3080,8 @@
       getToneMappingMode: function(colorSpace) {
         return this.spaces[colorSpace].outputColorSpaceConfig.toneMappingMode || "standard";
       },
-      getLuminanceCoefficients: function(target, colorSpace = this.workingColorSpace) {
-        return target.fromArray(this.spaces[colorSpace].luminanceCoefficients);
+      getLuminanceCoefficients: function(target2, colorSpace = this.workingColorSpace) {
+        return target2.fromArray(this.spaces[colorSpace].luminanceCoefficients);
       },
       define: function(colorSpaces) {
         Object.assign(this.spaces, colorSpaces);
@@ -3233,18 +3233,18 @@
      * @param {(Vector2|Vector3)} target - The target object the result is written into.
      * @return {(Vector2|Vector3)} The dimensions of the source.
      */
-    getSize(target) {
+    getSize(target2) {
       const data = this.data;
       if (typeof HTMLVideoElement !== "undefined" && data instanceof HTMLVideoElement) {
-        target.set(data.videoWidth, data.videoHeight, 0);
+        target2.set(data.videoWidth, data.videoHeight, 0);
       } else if (typeof VideoFrame !== "undefined" && data instanceof VideoFrame) {
-        target.set(data.displayWidth, data.displayHeight, 0);
+        target2.set(data.displayWidth, data.displayHeight, 0);
       } else if (data !== null) {
-        target.set(data.width, data.height, data.depth || 0);
+        target2.set(data.width, data.height, data.depth || 0);
       } else {
-        target.set(0, 0, 0);
+        target2.set(0, 0, 0);
       }
-      return target;
+      return target2;
     }
     /**
      * When the property is set to `true`, the engine allocates the memory
@@ -5029,9 +5029,9 @@
      * @param {Vector3} up - The up vector.
      * @return {Matrix4} A reference to this matrix.
      */
-    lookAt(eye, target, up) {
+    lookAt(eye, target2, up) {
       const te = this.elements;
-      _z.subVectors(eye, target);
+      _z.subVectors(eye, target2);
       if (_z.lengthSq() === 0) {
         _z.z = 1;
       }
@@ -6660,9 +6660,9 @@
      * @param {Vector3} target - The target vector the result is stored to.
      * @return {Vector3} The 3D object's position in world space.
      */
-    getWorldPosition(target) {
+    getWorldPosition(target2) {
       this.updateWorldMatrix(true, false);
-      return target.setFromMatrixPosition(this.matrixWorld);
+      return target2.setFromMatrixPosition(this.matrixWorld);
     }
     /**
      * Returns a Quaternion representing the position of the 3D object in world space.
@@ -6670,10 +6670,10 @@
      * @param {Quaternion} target - The target Quaternion the result is stored to.
      * @return {Quaternion} The 3D object's rotation in world space.
      */
-    getWorldQuaternion(target) {
+    getWorldQuaternion(target2) {
       this.updateWorldMatrix(true, false);
-      this.matrixWorld.decompose(_position$4, target, _scale$3);
-      return target;
+      this.matrixWorld.decompose(_position$4, target2, _scale$3);
+      return target2;
     }
     /**
      * Returns a vector representing the scale of the 3D object in world space.
@@ -6681,10 +6681,10 @@
      * @param {Vector3} target - The target vector the result is stored to.
      * @return {Vector3} The 3D object's scale in world space.
      */
-    getWorldScale(target) {
+    getWorldScale(target2) {
       this.updateWorldMatrix(true, false);
-      this.matrixWorld.decompose(_position$4, _quaternion$3, target);
-      return target;
+      this.matrixWorld.decompose(_position$4, _quaternion$3, target2);
+      return target2;
     }
     /**
      * Returns a vector representing the ("look") direction of the 3D object in world space.
@@ -6692,10 +6692,10 @@
      * @param {Vector3} target - The target vector the result is stored to.
      * @return {Vector3} The 3D object's direction in world space.
      */
-    getWorldDirection(target) {
+    getWorldDirection(target2) {
       this.updateWorldMatrix(true, false);
       const e = this.matrixWorld.elements;
-      return target.set(e[8], e[9], e[10]).normalize();
+      return target2.set(e[8], e[9], e[10]).normalize();
     }
     /**
      * Abstract method to get intersections between a casted ray and this
@@ -7775,7 +7775,7 @@
      * @param {string} [colorSpace=ColorManagement.workingColorSpace] - The color space.
      * @return {{h:number,s:number,l:number}} The HSL representation of this color.
      */
-    getHSL(target, colorSpace = ColorManagement.workingColorSpace) {
+    getHSL(target2, colorSpace = ColorManagement.workingColorSpace) {
       ColorManagement.workingToColorSpace(_color.copy(this), colorSpace);
       const r = _color.r, g = _color.g, b = _color.b;
       const max = Math.max(r, g, b);
@@ -7801,10 +7801,10 @@
         }
         hue /= 6;
       }
-      target.h = hue;
-      target.s = saturation;
-      target.l = lightness;
-      return target;
+      target2.h = hue;
+      target2.s = saturation;
+      target2.l = lightness;
+      return target2;
     }
     /**
      * Returns the RGB values of this color and stores them into the given target object.
@@ -7813,12 +7813,12 @@
      * @param {string} [colorSpace=ColorManagement.workingColorSpace] - The color space.
      * @return {Color} The RGB representation of this color.
      */
-    getRGB(target, colorSpace = ColorManagement.workingColorSpace) {
+    getRGB(target2, colorSpace = ColorManagement.workingColorSpace) {
       ColorManagement.workingToColorSpace(_color.copy(this), colorSpace);
-      target.r = _color.r;
-      target.g = _color.g;
-      target.b = _color.b;
-      return target;
+      target2.r = _color.r;
+      target2.g = _color.g;
+      target2.b = _color.b;
+      return target2;
     }
     /**
      * Returns the value of this color as a CSS style string. Example: `rgb(255,0,0)`.
@@ -8145,15 +8145,15 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The triangle's normal.
      */
-    static getNormal(a, b, c, target) {
-      target.subVectors(c, b);
+    static getNormal(a, b, c, target2) {
+      target2.subVectors(c, b);
       _v0$2.subVectors(a, b);
-      target.cross(_v0$2);
-      const targetLengthSq = target.lengthSq();
+      target2.cross(_v0$2);
+      const targetLengthSq = target2.lengthSq();
       if (targetLengthSq > 0) {
-        return target.multiplyScalar(1 / Math.sqrt(targetLengthSq));
+        return target2.multiplyScalar(1 / Math.sqrt(targetLengthSq));
       }
-      return target.set(0, 0, 0);
+      return target2.set(0, 0, 0);
     }
     /**
      * Computes a barycentric coordinates from the given vector.
@@ -8166,7 +8166,7 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The barycentric coordinates for the given point
      */
-    static getBarycoord(point, a, b, c, target) {
+    static getBarycoord(point, a, b, c, target2) {
       _v0$2.subVectors(c, a);
       _v1$5.subVectors(b, a);
       _v2$4.subVectors(point, a);
@@ -8177,13 +8177,13 @@
       const dot12 = _v1$5.dot(_v2$4);
       const denom = dot00 * dot11 - dot01 * dot01;
       if (denom === 0) {
-        target.set(0, 0, 0);
+        target2.set(0, 0, 0);
         return null;
       }
       const invDenom = 1 / denom;
       const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
       const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
-      return target.set(1 - u - v, v, u);
+      return target2.set(1 - u - v, v, u);
     }
     /**
      * Returns `true` if the given point, when projected onto the plane of the
@@ -8216,19 +8216,19 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The interpolated value.
      */
-    static getInterpolation(point, p1, p2, p3, v1, v2, v3, target) {
+    static getInterpolation(point, p1, p2, p3, v1, v2, v3, target2) {
       if (this.getBarycoord(point, p1, p2, p3, _v3$2) === null) {
-        target.x = 0;
-        target.y = 0;
-        if ("z" in target) target.z = 0;
-        if ("w" in target) target.w = 0;
+        target2.x = 0;
+        target2.y = 0;
+        if ("z" in target2) target2.z = 0;
+        if ("w" in target2) target2.w = 0;
         return null;
       }
-      target.setScalar(0);
-      target.addScaledVector(v1, _v3$2.x);
-      target.addScaledVector(v2, _v3$2.y);
-      target.addScaledVector(v3, _v3$2.z);
-      return target;
+      target2.setScalar(0);
+      target2.addScaledVector(v1, _v3$2.x);
+      target2.addScaledVector(v2, _v3$2.y);
+      target2.addScaledVector(v3, _v3$2.z);
+      return target2;
     }
     /**
      * Computes the value barycentrically interpolated for the given attribute and indices.
@@ -8241,18 +8241,18 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The interpolated attribute value.
      */
-    static getInterpolatedAttribute(attr, i1, i2, i3, barycoord, target) {
+    static getInterpolatedAttribute(attr, i1, i2, i3, barycoord, target2) {
       _v40.setScalar(0);
       _v41.setScalar(0);
       _v42.setScalar(0);
       _v40.fromBufferAttribute(attr, i1);
       _v41.fromBufferAttribute(attr, i2);
       _v42.fromBufferAttribute(attr, i3);
-      target.setScalar(0);
-      target.addScaledVector(_v40, barycoord.x);
-      target.addScaledVector(_v41, barycoord.y);
-      target.addScaledVector(_v42, barycoord.z);
-      return target;
+      target2.setScalar(0);
+      target2.addScaledVector(_v40, barycoord.x);
+      target2.addScaledVector(_v41, barycoord.y);
+      target2.addScaledVector(_v42, barycoord.z);
+      return target2;
     }
     /**
      * Returns `true` if the triangle is oriented towards the given direction.
@@ -8348,8 +8348,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The triangle's midpoint.
      */
-    getMidpoint(target) {
-      return target.addVectors(this.a, this.b).add(this.c).multiplyScalar(1 / 3);
+    getMidpoint(target2) {
+      return target2.addVectors(this.a, this.b).add(this.c).multiplyScalar(1 / 3);
     }
     /**
      * Computes the normal of the triangle.
@@ -8357,8 +8357,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The triangle's normal.
      */
-    getNormal(target) {
-      return _Triangle.getNormal(this.a, this.b, this.c, target);
+    getNormal(target2) {
+      return _Triangle.getNormal(this.a, this.b, this.c, target2);
     }
     /**
      * Computes a plane the triangle lies within.
@@ -8366,8 +8366,8 @@
      * @param {Plane} target - The target vector that is used to store the method's result.
      * @return {Plane} The plane the triangle lies within.
      */
-    getPlane(target) {
-      return target.setFromCoplanarPoints(this.a, this.b, this.c);
+    getPlane(target2) {
+      return target2.setFromCoplanarPoints(this.a, this.b, this.c);
     }
     /**
      * Computes a barycentric coordinates from the given vector.
@@ -8377,8 +8377,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The barycentric coordinates for the given point
      */
-    getBarycoord(point, target) {
-      return _Triangle.getBarycoord(point, this.a, this.b, this.c, target);
+    getBarycoord(point, target2) {
+      return _Triangle.getBarycoord(point, this.a, this.b, this.c, target2);
     }
     /**
      * Computes the value barycentrically interpolated for the given point on the
@@ -8391,8 +8391,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The interpolated value.
      */
-    getInterpolation(point, v1, v2, v3, target) {
-      return _Triangle.getInterpolation(point, this.a, this.b, this.c, v1, v2, v3, target);
+    getInterpolation(point, v1, v2, v3, target2) {
+      return _Triangle.getInterpolation(point, this.a, this.b, this.c, v1, v2, v3, target2);
     }
     /**
      * Returns `true` if the given point, when projected onto the plane of the
@@ -8430,7 +8430,7 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The closest point on the triangle.
      */
-    closestPointToPoint(p, target) {
+    closestPointToPoint(p, target2) {
       const a = this.a, b = this.b, c = this.c;
       let v, w;
       _vab.subVectors(b, a);
@@ -8439,40 +8439,40 @@
       const d1 = _vab.dot(_vap);
       const d2 = _vac.dot(_vap);
       if (d1 <= 0 && d2 <= 0) {
-        return target.copy(a);
+        return target2.copy(a);
       }
       _vbp.subVectors(p, b);
       const d3 = _vab.dot(_vbp);
       const d4 = _vac.dot(_vbp);
       if (d3 >= 0 && d4 <= d3) {
-        return target.copy(b);
+        return target2.copy(b);
       }
       const vc = d1 * d4 - d3 * d2;
       if (vc <= 0 && d1 >= 0 && d3 <= 0) {
         v = d1 / (d1 - d3);
-        return target.copy(a).addScaledVector(_vab, v);
+        return target2.copy(a).addScaledVector(_vab, v);
       }
       _vcp.subVectors(p, c);
       const d5 = _vab.dot(_vcp);
       const d6 = _vac.dot(_vcp);
       if (d6 >= 0 && d5 <= d6) {
-        return target.copy(c);
+        return target2.copy(c);
       }
       const vb = d5 * d2 - d1 * d6;
       if (vb <= 0 && d2 >= 0 && d6 <= 0) {
         w = d2 / (d2 - d6);
-        return target.copy(a).addScaledVector(_vac, w);
+        return target2.copy(a).addScaledVector(_vac, w);
       }
       const va = d3 * d6 - d5 * d4;
       if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
         _vbc.subVectors(c, b);
         w = (d4 - d3) / (d4 - d3 + (d5 - d6));
-        return target.copy(b).addScaledVector(_vbc, w);
+        return target2.copy(b).addScaledVector(_vbc, w);
       }
       const denom = 1 / (va + vb + vc);
       v = vb * denom;
       w = vc * denom;
-      return target.copy(a).addScaledVector(_vab, v).addScaledVector(_vac, w);
+      return target2.copy(a).addScaledVector(_vab, v).addScaledVector(_vac, w);
     }
     /**
      * Returns `true` if this triangle is equal with the given one.
@@ -8624,8 +8624,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The center point.
      */
-    getCenter(target) {
-      return this.isEmpty() ? target.set(0, 0, 0) : target.addVectors(this.min, this.max).multiplyScalar(0.5);
+    getCenter(target2) {
+      return this.isEmpty() ? target2.set(0, 0, 0) : target2.addVectors(this.min, this.max).multiplyScalar(0.5);
     }
     /**
      * Returns the dimensions of this box.
@@ -8633,8 +8633,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The size.
      */
-    getSize(target) {
-      return this.isEmpty() ? target.set(0, 0, 0) : target.subVectors(this.max, this.min);
+    getSize(target2) {
+      return this.isEmpty() ? target2.set(0, 0, 0) : target2.subVectors(this.max, this.min);
     }
     /**
      * Expands the boundaries of this box to include the given point.
@@ -8748,8 +8748,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} A point as a proportion of this box's width, height and depth.
      */
-    getParameter(point, target) {
-      return target.set(
+    getParameter(point, target2) {
+      return target2.set(
         (point.x - this.min.x) / (this.max.x - this.min.x),
         (point.y - this.min.y) / (this.max.y - this.min.y),
         (point.z - this.min.z) / (this.max.z - this.min.z)
@@ -8870,8 +8870,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The clamped point.
      */
-    clampPoint(point, target) {
-      return target.copy(point).clamp(this.min, this.max);
+    clampPoint(point, target2) {
+      return target2.copy(point).clamp(this.min, this.max);
     }
     /**
      * Returns the euclidean distance from any edge of this box to the specified point. If
@@ -8889,14 +8889,14 @@
      * @param {Sphere} target - The target sphere that is used to store the method's result.
      * @return {Sphere} The bounding sphere that encloses this bounding box.
      */
-    getBoundingSphere(target) {
+    getBoundingSphere(target2) {
       if (this.isEmpty()) {
-        target.makeEmpty();
+        target2.makeEmpty();
       } else {
-        this.getCenter(target.center);
-        target.radius = this.getSize(_vector$b).length() * 0.5;
+        this.getCenter(target2.center);
+        target2.radius = this.getSize(_vector$b).length() * 0.5;
       }
-      return target;
+      return target2;
     }
     /**
      * Computes the intersection of this bounding box and the given one, setting the upper
@@ -9617,14 +9617,14 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The clamped point.
      */
-    clampPoint(point, target) {
+    clampPoint(point, target2) {
       const deltaLengthSq = this.center.distanceToSquared(point);
-      target.copy(point);
+      target2.copy(point);
       if (deltaLengthSq > this.radius * this.radius) {
-        target.sub(this.center).normalize();
-        target.multiplyScalar(this.radius).add(this.center);
+        target2.sub(this.center).normalize();
+        target2.multiplyScalar(this.radius).add(this.center);
       }
-      return target;
+      return target2;
     }
     /**
      * Returns a bounding box that encloses this sphere.
@@ -9632,14 +9632,14 @@
      * @param {Box3} target - The target box that is used to store the method's result.
      * @return {Box3} The bounding box that encloses this sphere.
      */
-    getBoundingBox(target) {
+    getBoundingBox(target2) {
       if (this.isEmpty()) {
-        target.makeEmpty();
-        return target;
+        target2.makeEmpty();
+        return target2;
       }
-      target.set(this.center, this.center);
-      target.expandByScalar(this.radius);
-      return target;
+      target2.set(this.center, this.center);
+      target2.expandByScalar(this.radius);
+      return target2;
     }
     /**
      * Transforms this sphere with the given 4x4 transformation matrix.
@@ -10987,8 +10987,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} A position on the ray.
      */
-    at(t, target) {
-      return target.copy(this.origin).addScaledVector(this.direction, t);
+    at(t, target2) {
+      return target2.copy(this.origin).addScaledVector(this.direction, t);
     }
     /**
      * Adjusts the direction of the ray to point at the given vector in world space.
@@ -11017,13 +11017,13 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The closest point on this ray.
      */
-    closestPointToPoint(point, target) {
-      target.subVectors(point, this.origin);
-      const directionDistance = target.dot(this.direction);
+    closestPointToPoint(point, target2) {
+      target2.subVectors(point, this.origin);
+      const directionDistance = target2.dot(this.direction);
       if (directionDistance < 0) {
-        return target.copy(this.origin);
+        return target2.copy(this.origin);
       }
-      return target.copy(this.origin).addScaledVector(this.direction, directionDistance);
+      return target2.copy(this.origin).addScaledVector(this.direction, directionDistance);
     }
     /**
      * Returns the distance of the closest approach between this ray and the given point.
@@ -11125,7 +11125,7 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The intersection point.
      */
-    intersectSphere(sphere, target) {
+    intersectSphere(sphere, target2) {
       _vector$7.subVectors(sphere.center, this.origin);
       const tca = _vector$7.dot(this.direction);
       const d2 = _vector$7.dot(_vector$7) - tca * tca;
@@ -11135,8 +11135,8 @@
       const t0 = tca - thc;
       const t1 = tca + thc;
       if (t1 < 0) return null;
-      if (t0 < 0) return this.at(t1, target);
-      return this.at(t0, target);
+      if (t0 < 0) return this.at(t1, target2);
+      return this.at(t0, target2);
     }
     /**
      * Returns `true` if this ray intersects with the given sphere.
@@ -11174,12 +11174,12 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The intersection point.
      */
-    intersectPlane(plane, target) {
+    intersectPlane(plane, target2) {
       const t = this.distanceToPlane(plane);
       if (t === null) {
         return null;
       }
-      return this.at(t, target);
+      return this.at(t, target2);
     }
     /**
      * Returns `true` if this ray intersects with the given plane.
@@ -11206,7 +11206,7 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The intersection point.
      */
-    intersectBox(box, target) {
+    intersectBox(box, target2) {
       let tmin, tmax, tymin, tymax, tzmin, tzmax;
       const invdirx = 1 / this.direction.x, invdiry = 1 / this.direction.y, invdirz = 1 / this.direction.z;
       const origin = this.origin;
@@ -11238,7 +11238,7 @@
       if (tzmin > tmin || tmin !== tmin) tmin = tzmin;
       if (tzmax < tmax || tmax !== tmax) tmax = tzmax;
       if (tmax < 0) return null;
-      return this.at(tmin >= 0 ? tmin : tmax, target);
+      return this.at(tmin >= 0 ? tmin : tmax, target2);
     }
     /**
      * Returns `true` if this ray intersects with the given box.
@@ -11260,7 +11260,7 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {?Vector3} The intersection point.
      */
-    intersectTriangle(a, b, c, backfaceCulling, target) {
+    intersectTriangle(a, b, c, backfaceCulling, target2) {
       _edge1.subVectors(b, a);
       _edge2.subVectors(c, a);
       _normal$1.crossVectors(_edge1, _edge2);
@@ -11291,7 +11291,7 @@
       if (QdN < 0) {
         return null;
       }
-      return this.at(QdN / DdN, target);
+      return this.at(QdN / DdN, target2);
     }
     /**
      * Transforms this ray with the given 4x4 transformation matrix.
@@ -11449,12 +11449,12 @@
      * @param {Vector3} target - The target object that is used to store the method's result.
      * @return {Vector3} The vertex position in local space.
      */
-    getVertexPosition(index, target) {
+    getVertexPosition(index, target2) {
       const geometry = this.geometry;
       const position = geometry.attributes.position;
       const morphPosition = geometry.morphAttributes.position;
       const morphTargetsRelative = geometry.morphTargetsRelative;
-      target.fromBufferAttribute(position, index);
+      target2.fromBufferAttribute(position, index);
       const morphInfluences = this.morphTargetInfluences;
       if (morphPosition && morphInfluences) {
         _morphA.set(0, 0, 0);
@@ -11466,12 +11466,12 @@
           if (morphTargetsRelative) {
             _morphA.addScaledVector(_tempA, influence);
           } else {
-            _morphA.addScaledVector(_tempA.sub(target), influence);
+            _morphA.addScaledVector(_tempA.sub(target2), influence);
           }
         }
-        target.add(_morphA);
+        target2.add(_morphA);
       }
-      return target;
+      return target2;
     }
     /**
      * Computes intersection points between a casted ray and this line.
@@ -11783,8 +11783,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The projected point on the plane.
      */
-    projectPoint(point, target) {
-      return target.copy(point).addScaledVector(this.normal, -this.distanceToPoint(point));
+    projectPoint(point, target2) {
+      return target2.copy(point).addScaledVector(this.normal, -this.distanceToPoint(point));
     }
     /**
      * Returns the intersection point of the passed line and the plane. Returns
@@ -11796,12 +11796,12 @@
      * @param {boolean} [clampToLine=true] - Whether to clamp the intersection to the line segment.
      * @return {?Vector3} The intersection point. Returns `null` if no intersection is detected.
      */
-    intersectLine(line, target, clampToLine = true) {
+    intersectLine(line, target2, clampToLine = true) {
       const direction = line.delta(_vector1);
       const denominator = this.normal.dot(direction);
       if (denominator === 0) {
         if (this.distanceToPoint(line.start) === 0) {
-          return target.copy(line.start);
+          return target2.copy(line.start);
         }
         return null;
       }
@@ -11809,7 +11809,7 @@
       if (clampToLine === true && (t < 0 || t > 1)) {
         return null;
       }
-      return target.copy(line.start).addScaledVector(direction, t);
+      return target2.copy(line.start).addScaledVector(direction, t);
     }
     /**
      * Returns `true` if the given line segment intersects with (passes through) the plane.
@@ -11847,8 +11847,8 @@
      * @param {Vector3} target - The target vector that is used to store the method's result.
      * @return {Vector3} The coplanar point.
      */
-    coplanarPoint(target) {
-      return target.copy(this.normal).multiplyScalar(-this.constant);
+    coplanarPoint(target2) {
+      return target2.copy(this.normal).multiplyScalar(-this.constant);
     }
     /**
      * Apply a 4x4 matrix to the plane. The matrix must be an affine, homogeneous transform.
@@ -13969,8 +13969,8 @@
      * @param {Vector3} target - The target vector the result is stored to.
      * @return {Vector3} The 3D object's direction in world space.
      */
-    getWorldDirection(target) {
-      return super.getWorldDirection(target).negate();
+    getWorldDirection(target2) {
+      return super.getWorldDirection(target2).negate();
     }
     updateMatrixWorld(force) {
       super.updateMatrixWorld(force);
@@ -14106,9 +14106,9 @@
      * @param {Vector2} target - The target vector that is used to store result where x is width and y is height.
      * @returns {Vector2} The view size.
      */
-    getViewSize(distance, target) {
+    getViewSize(distance, target2) {
       this.getViewBounds(distance, _minTarget, _maxTarget);
-      return target.subVectors(_maxTarget, _minTarget);
+      return target2.subVectors(_maxTarget, _minTarget);
     }
     /**
      * Sets an offset in a larger frustum. This is useful for multi-window or
@@ -17256,9 +17256,9 @@
     cubeUVRenderTarget.scissorTest = true;
     return cubeUVRenderTarget;
   }
-  function _setViewport(target, x, y, width, height) {
-    target.viewport.set(x, y, width, height);
-    target.scissor.set(x, y, width, height);
+  function _setViewport(target2, x, y, width, height) {
+    target2.viewport.set(x, y, width, height);
+    target2.scissor.set(x, y, width, height);
   }
   function _getGGXShader(lodMax, width, height) {
     const shaderMaterial = new ShaderMaterial({
@@ -21361,7 +21361,7 @@
     const viewportParam = gl.getParameter(gl.VIEWPORT);
     const currentScissor = new Vector4().fromArray(scissorParam);
     const currentViewport = new Vector4().fromArray(viewportParam);
-    function createTexture(type, target, count, dimensions) {
+    function createTexture(type, target2, count, dimensions) {
       const data = new Uint8Array(4);
       const texture = gl.createTexture();
       gl.bindTexture(type, texture);
@@ -21369,9 +21369,9 @@
       gl.texParameteri(type, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       for (let i = 0; i < count; i++) {
         if (type === gl.TEXTURE_3D || type === gl.TEXTURE_2D_ARRAY) {
-          gl.texImage3D(target, 0, gl.RGBA, 1, 1, dimensions, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+          gl.texImage3D(target2, 0, gl.RGBA, 1, 1, dimensions, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
         } else {
-          gl.texImage2D(target + i, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+          gl.texImage2D(target2 + i, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
         }
       }
       return texture;
@@ -21402,14 +21402,14 @@
         enabledCapabilities[id] = false;
       }
     }
-    function bindFramebuffer(target, framebuffer) {
-      if (currentBoundFramebuffers[target] !== framebuffer) {
-        gl.bindFramebuffer(target, framebuffer);
-        currentBoundFramebuffers[target] = framebuffer;
-        if (target === gl.DRAW_FRAMEBUFFER) {
+    function bindFramebuffer(target2, framebuffer) {
+      if (currentBoundFramebuffers[target2] !== framebuffer) {
+        gl.bindFramebuffer(target2, framebuffer);
+        currentBoundFramebuffers[target2] = framebuffer;
+        if (target2 === gl.DRAW_FRAMEBUFFER) {
           currentBoundFramebuffers[gl.FRAMEBUFFER] = framebuffer;
         }
-        if (target === gl.FRAMEBUFFER) {
+        if (target2 === gl.FRAMEBUFFER) {
           currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER] = framebuffer;
         }
         return true;
@@ -21955,8 +21955,8 @@
     function textureNeedsGenerateMipmaps(texture) {
       return texture.generateMipmaps;
     }
-    function generateMipmap(target) {
-      _gl.generateMipmap(target);
+    function generateMipmap(target2) {
+      _gl.generateMipmap(target2);
     }
     function getTargetType(texture) {
       if (texture.isWebGLCubeRenderTarget) return _gl.TEXTURE_CUBE_MAP;
@@ -25176,8 +25176,8 @@ void main() {
         _pixelRatio = value;
         this.setSize(_width, _height, false);
       };
-      this.getSize = function(target) {
-        return target.set(_width, _height);
+      this.getSize = function(target2) {
+        return target2.set(_width, _height);
       };
       this.setSize = function(width, height, updateStyle = true) {
         if (xr.isPresenting) {
@@ -25197,8 +25197,8 @@ void main() {
         }
         this.setViewport(0, 0, width, height);
       };
-      this.getDrawingBufferSize = function(target) {
-        return target.set(_width * _pixelRatio, _height * _pixelRatio).floor();
+      this.getDrawingBufferSize = function(target2) {
+        return target2.set(_width * _pixelRatio, _height * _pixelRatio).floor();
       };
       this.setDrawingBufferSize = function(width, height, pixelRatio) {
         _width = width;
@@ -25223,11 +25223,11 @@ void main() {
         }
         output.setEffects(effects || []);
       };
-      this.getCurrentViewport = function(target) {
-        return target.copy(_currentViewport);
+      this.getCurrentViewport = function(target2) {
+        return target2.copy(_currentViewport);
       };
-      this.getViewport = function(target) {
-        return target.copy(_viewport);
+      this.getViewport = function(target2) {
+        return target2.copy(_viewport);
       };
       this.setViewport = function(x, y, width, height) {
         if (x.isVector4) {
@@ -25237,8 +25237,8 @@ void main() {
         }
         state.viewport(_currentViewport.copy(_viewport).multiplyScalar(_pixelRatio).round());
       };
-      this.getScissor = function(target) {
-        return target.copy(_scissor);
+      this.getScissor = function(target2) {
+        return target2.copy(_scissor);
       };
       this.setScissor = function(x, y, width, height) {
         if (x.isVector4) {
@@ -25260,8 +25260,8 @@ void main() {
       this.setTransparentSort = function(method) {
         _transparentSort = method;
       };
-      this.getClearColor = function(target) {
-        return target.copy(background.getClearColor());
+      this.getClearColor = function(target2) {
+        return target2.copy(background.getClearColor());
       };
       this.setClearColor = function() {
         background.setClearColor(...arguments);
@@ -26523,9 +26523,9 @@ void main() {
         }
         state.unbindTexture();
       };
-      this.initRenderTarget = function(target) {
-        if (properties.get(target).__webglFramebuffer === void 0) {
-          textures.setupRenderTarget(target);
+      this.initRenderTarget = function(target2) {
+        if (properties.get(target2).__webglFramebuffer === void 0) {
+          textures.setupRenderTarget(target2);
         }
       };
       this.initTexture = function(texture) {
@@ -26593,10 +26593,12 @@ void main() {
   var renderer = null;
   var mesh = null;
   var ready = false;
+  var target = new Vector3(0, 0, 0);
   var sph = { theta: Math.PI / 4, phi: Math.PI / 3, r: 3 };
   var isDown = false;
   var lx = 0;
   var ly = 0;
+  var dragMode = "rotate";
   function updateCamera() {
     if (!camera) return;
     camera.position.set(
@@ -26604,8 +26606,18 @@ void main() {
       sph.r * Math.sin(sph.phi) * Math.sin(sph.theta),
       sph.r * Math.cos(sph.phi)
     );
+    camera.position.add(target);
     camera.up.set(0, 0, 1);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(target);
+  }
+  function panCamera(dx, dy) {
+    if (!camera) return;
+    const toTarget = target.clone().sub(camera.position).normalize();
+    const right = toTarget.clone().cross(camera.up).normalize();
+    const up = camera.up.clone().normalize();
+    const panScale = Math.max(1e-3, sph.r * 18e-4);
+    const pan = right.multiplyScalar(-dx * panScale).add(up.multiplyScalar(dy * panScale));
+    target.add(pan);
   }
   function init() {
     if (ready) return;
@@ -26625,16 +26637,24 @@ void main() {
     const d2 = new DirectionalLight(6719675, 0.4);
     d2.position.set(-5, -4, -3);
     scene.add(d2);
+    geoCanvas.addEventListener("contextmenu", (e) => e.preventDefault());
     geoCanvas.addEventListener("mousedown", (e) => {
       isDown = true;
       lx = e.clientX;
       ly = e.clientY;
+      dragMode = e.button === 2 || e.shiftKey ? "pan" : "rotate";
     });
     window.addEventListener("mouseup", () => isDown = false);
     window.addEventListener("mousemove", (e) => {
       if (!isDown) return;
-      sph.theta -= (e.clientX - lx) * 0.01;
-      sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + (e.clientY - ly) * 0.01));
+      const dx = e.clientX - lx;
+      const dy = e.clientY - ly;
+      if (dragMode === "pan") {
+        panCamera(dx, dy);
+      } else {
+        sph.theta -= dx * 0.01;
+        sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + dy * 0.01));
+      }
       lx = e.clientX;
       ly = e.clientY;
       updateCamera();
@@ -26820,7 +26840,7 @@ void main() {
         mesh = new Mesh(geo, mat);
         scene.add(mesh);
         const triCount = geo.attributes.position.count / 3;
-        geoLabel.textContent = msg.fileName + " \u2014 " + triCount.toLocaleString() + " tri  |  drag to rotate  |  scroll to zoom";
+        geoLabel.textContent = msg.fileName + " \u2014 " + triCount.toLocaleString() + " tri  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom";
       } catch (err) {
         geoLabel.textContent = "Parse error: " + err.message;
       }
