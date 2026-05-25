@@ -12,6 +12,7 @@ export class InspectorPanel {
   public static currentPanel: InspectorPanel | undefined;
 
   private readonly _panel: vscode.WebviewPanel;
+  private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
   private _currentFilePath: string | undefined;
   private _tree: DictNode | undefined;
@@ -38,14 +39,16 @@ export class InspectorPanel {
       },
     );
 
-    InspectorPanel.currentPanel = new InspectorPanel(panel, context);
+    InspectorPanel.currentPanel = new InspectorPanel(panel, extensionUri, context);
   }
 
   private constructor(
     panel: vscode.WebviewPanel,
+    extensionUri: vscode.Uri,
     _context: vscode.ExtensionContext,
   ) {
     this._panel = panel;
+    this._extensionUri = extensionUri;
     this._panel.webview.html = this._buildHtml();
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
@@ -144,10 +147,52 @@ export class InspectorPanel {
         try { this._loadFile(msg.filePath, fs.readFileSync(msg.filePath, "utf-8")); }
         catch { /* */ }
         break;
-      case "closeGeoViewer":
-        this._panel.webview.postMessage({ command: "hideGeoViewer" });
+      case "requestGeoData": {
+        const resolved = this._resolveGeomPath(msg.value);
+        if (!resolved) break;
+        try {
+          const buf = fs.readFileSync(resolved);
+          const header = buf.slice(0, 6).toString("ascii").toLowerCase();
+          const isBinary = header !== "solid ";
+          this._panel.webview.postMessage({
+            command: "geoDataReady",
+            canvasId: msg.canvasId,
+            dataBase64: buf.toString("base64"),
+            isBinary,
+          });
+        } catch { /* unreadable */ }
         break;
+      }
+      case "openGeoFromThumb": {
+        const resolved = this._resolveGeomPath(msg.value);
+        if (resolved) this.previewGeometry(resolved);
+        break;
+      }
     }
+  }
+
+  private _resolveGeomPath(value: string): string | null {
+    if (!this._currentFilePath) return null;
+    const name = path.basename(value);
+    let caseRoot: string | null = null;
+    let dir = path.dirname(this._currentFilePath);
+    for (let i = 0; i < 12; i++) {
+      if (
+        fs.existsSync(path.join(dir, "system", "controlDict")) ||
+        fs.existsSync(path.join(dir, "system", "fvSchemes"))
+      ) { caseRoot = dir; break; }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    if (!caseRoot) return null;
+    const candidates = [
+      path.join(caseRoot, value),
+      path.join(caseRoot, "constant", "triSurface", name),
+      path.join(caseRoot, "constant", "geometry", name),
+      path.join(caseRoot, "constant", name),
+    ];
+    return candidates.find(c => fs.existsSync(c)) ?? null;
   }
 
   /** Load an STL/OBJ file into the inline 3D viewer. Called from extension.ts command. */
@@ -210,12 +255,15 @@ export class InspectorPanel {
   private _buildHtml(): string {
     const nonce = getNonce();
     const csp = this._panel.webview.cspSource;
+    const geoViewerUri = this._panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'media', 'geo-viewer.js'),
+    );
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  content="default-src 'none'; style-src ${csp} 'unsafe-inline'; script-src 'nonce-${nonce}' ${csp}; img-src data: ${csp};">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>∇</title>
 <style>
@@ -266,6 +314,7 @@ body{
 .file-chip.active{border-color:var(--vscode-focusBorder);color:var(--vscode-tab-activeForeground,var(--vscode-editor-foreground));background:var(--vscode-list-activeSelectionBackground,transparent);}
 
 /* ── Canvas ── */
+#main-split{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 #wrap{flex:1;overflow:auto;background:var(--vscode-editor-background);}
 #wrap::-webkit-scrollbar{width:5px;height:5px;}
 #wrap::-webkit-scrollbar-track{background:transparent;}
@@ -347,31 +396,44 @@ body{
 #empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--vscode-descriptionForeground,#555);font-size:10px;pointer-events:none;font-family:inherit;}
 #empty span:first-child{font-size:22px;}
 
-/* ── 3D Geo Viewer ── */
-#geo-overlay{display:none;position:fixed;inset:0;z-index:9000;flex-direction:column;background:rgba(0,0,0,0.88);}
-#geo-header{display:flex;align-items:center;padding:6px 10px;background:rgba(10,10,18,0.95);border-bottom:1px solid #333;flex-shrink:0;}
+/* ── 3D Geo Panel (bottom split) ── */
+#split-handle{display:none;height:5px;cursor:ns-resize;flex-shrink:0;background:var(--vscode-panel-border,#333);position:relative;}
+#split-handle::after{content:'';position:absolute;inset:-3px 0;cursor:ns-resize;}
+#split-handle:hover{background:var(--vscode-focusBorder,#007fd4);}
+#geo-panel{display:none;flex-direction:column;flex-shrink:0;background:#111318;position:relative;height:300px;}
+#geo-header{display:flex;align-items:center;padding:5px 10px;background:rgba(10,10,18,0.95);border-bottom:1px solid #2a2d35;flex-shrink:0;}
 #geo-close{background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;margin-right:8px;line-height:1;}
 #geo-close:hover{color:#fff;}
-#geo-label{font-size:11px;color:#ccc;flex:1;font-family:inherit;}
+#geo-label{font-size:10px;color:#aaa;flex:1;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #geo-canvas{flex:1;width:100%;display:block;cursor:grab;}
 #geo-canvas:active{cursor:grabbing;}
+#axes-canvas{position:absolute;bottom:8px;left:8px;pointer-events:none;width:80px;height:80px;}
+/* ── Inline Geo Thumbnails ── */
+.geo-ref{display:flex;flex-direction:column;gap:3px;}
+.geo-thumb{width:150px;height:100px;border-radius:4px;display:block;background:#111318;object-fit:cover;cursor:pointer;border:1px solid rgba(77,184,255,0.2);}
+.geo-thumb:hover{border-color:rgba(77,184,255,0.6);}
+.geo-block-thumb{width:calc(100% - 20px);height:100px;border-radius:4px;display:block;background:#111318;object-fit:cover;cursor:pointer;border:1px solid rgba(77,184,255,0.2);margin:0 10px 8px;}
 </style>
 </head>
 <body>
-<div id="geo-overlay">
+<div id="nav">
+  <div id="dir-tabs"></div>
+  <div id="chips-scroll"><div id="file-chips"></div></div>
+</div>
+<div id="main-split">
+<div id="wrap"><div id="canvas">
+  <div id="empty"><span>∇</span><span>open an openfoam file</span></div>
+</div></div>
+<div id="split-handle"></div>
+<div id="geo-panel">
   <div id="geo-header">
     <button id="geo-close">✕</button>
     <span id="geo-label"></span>
   </div>
   <canvas id="geo-canvas"></canvas>
+  <canvas id="axes-canvas" width="80" height="80"></canvas>
 </div>
-<div id="nav">
-  <div id="dir-tabs"></div>
-  <div id="chips-scroll"><div id="file-chips"></div></div>
 </div>
-<div id="wrap"><div id="canvas">
-  <div id="empty"><span>∇</span><span>open an openfoam file</span></div>
-</div></div>
 
 <script nonce="${nonce}">
 const vscode=acquireVsCodeApi();
@@ -436,11 +498,15 @@ function collectBlocks(n,depth,parentId,out){
 }
 
 // Estimate card width from content (block name + longest param row)
+const GEO_RE=/\.(stl|obj|vtk)$/i;
+function isGeoVal(v){return GEO_RE.test(v||'');}
 function estimateW(n){
   let w=n.name.length*CCHARW+48; // header pill
+  if(isGeoVal(n.name))w=Math.max(w,175);
   for(const p of pkids(n)){
     const rw=(p.name.length+(p.rawValue||'').length)*CCHARW+CPAD*2+28;
     if(rw>w)w=rw;
+    if(isGeoVal(p.rawValue))w=Math.max(w,175);
   }
   return Math.min(CMAX,Math.max(CMIN,Math.ceil(w)));
 }
@@ -470,10 +536,14 @@ function renderTree(){
   const xLeft=id=>xpos.get(id)||PX;
   const xMid =id=>xLeft(id)+(cw.get(id)||CMIN)/2;
 
-  // Card height: header + param rows
+  // Card height: header + optional block thumbnail + param rows
+  const GEO_EXTRA=103; // 100px thumb + 3px gap, beyond normal PARAM_H
+  const BLOCK_THUMB_H=108; // 100px thumb + 8px bottom margin
   const cardH=n=>{
     const p=pkids(n);
-    return HEAD_H+(p.length?CPAD+p.length*PARAM_H+CPAD:0);
+    const blockGeo=isGeoVal(n.name)?BLOCK_THUMB_H:0;
+    const extra=p.reduce((s,pm)=>s+(isGeoVal(pm.rawValue)?GEO_EXTRA:0),0);
+    return HEAD_H+blockGeo+(p.length?CPAD+p.length*PARAM_H+extra+CPAD:0);
   };
 
   // Assign non-overlapping levels to connector bars (interval graph coloring)
@@ -539,6 +609,17 @@ function renderTree(){
     head.addEventListener('click',()=>vscode.postMessage({command:'jumpToLine',line:+head.dataset.line}));
     el.appendChild(head);
 
+    // Inline 3D thumbnail when the block name is a geometry file
+    if(isGeoVal(node.name)){
+      const img=mk('img','geo-block-thumb');
+      const gid='gt_'+Math.random().toString(36).slice(2,9);
+      img.id=gid;
+      img.title='Click to open full 3D viewer';
+      img.addEventListener('click',e=>{e.stopPropagation();vscode.postMessage({command:'openGeoFromThumb',value:node.name});});
+      el.appendChild(img);
+      vscode.postMessage({command:'requestGeoData',value:node.name,canvasId:gid});
+    }
+
     // Params grid
     if(params.length){
       const grid=mk('div','card-grid');
@@ -588,6 +669,23 @@ function widget(param){
     });
     return label;
   }
+  if(/\.(stl|obj|vtk)$/i.test(raw)){
+    const wrap=mk('div','geo-ref');
+    const inp=mk('input','vstr');inp.value=raw;inp.type='text';
+    let cur=raw;
+    inp.addEventListener('click',e=>e.stopPropagation());
+    inp.addEventListener('blur',()=>{if(inp.value!==cur){cur=inp.value;vscode.postMessage({command:'saveParam',filePath:S.activeFile,line:param.line,value:cur});}});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();if(e.key==='Escape'){inp.value=cur;inp.blur();}});
+    wrap.appendChild(inp);
+    const img=mk('img','geo-thumb');
+    const gid='gt_'+Math.random().toString(36).slice(2,9);
+    img.id=gid;
+    img.title='Click to open full 3D viewer';
+    img.addEventListener('click',e=>{e.stopPropagation();vscode.postMessage({command:'openGeoFromThumb',value:raw});});
+    wrap.appendChild(img);
+    vscode.postMessage({command:'requestGeoData',value:raw,canvasId:gid});
+    return wrap;
+  }
   let cls='vstr';
   if(vt==='number')cls='vnum';
   if(vt==='reference')cls='vref';
@@ -617,201 +715,26 @@ function hl(nodeId){
   if(el){el.classList.add('highlighted');el.scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'});}
 }
 
+// ── Split panel resize ───────────────────────────────────────
+{
+  const sh=document.getElementById('split-handle');
+  const gp=document.getElementById('geo-panel');
+  let drag=false,sy=0,sh0=0;
+  sh.addEventListener('mousedown',e=>{drag=true;sy=e.clientY;sh0=gp.clientHeight;e.preventDefault();});
+  window.addEventListener('mousemove',e=>{
+    if(!drag)return;
+    const h=Math.max(120,Math.min(window.innerHeight-180,sh0+(sy-e.clientY)));
+    gp.style.height=h+'px';
+  });
+  window.addEventListener('mouseup',()=>drag=false);
+}
+
 // ── Utils ────────────────────────────────────────────────────
 function mk(tag,cls){const e=document.createElement(tag);if(cls)e.className=cls;return e;}
 function sid(s){return String(s).replace(/[^a-zA-Z0-9_-]/g,'_');}
-
-// ── 3D Geometry Viewer (inline WebGL) ───────────────────────
-(function(){
-  const overlay=document.getElementById('geo-overlay');
-  const canvas=document.getElementById('geo-canvas');
-  const label=document.getElementById('geo-label');
-  if(!overlay||!canvas||!label)return;
-
-  let gl=null,prog=null,vBuf=null,nBuf=null,triCount=0;
-  let rotX=0.4,rotY=0.3,zoom=1,dragging=false,lastX=0,lastY=0;
-  let raf=null;
-
-  document.getElementById('geo-close').addEventListener('click',()=>{
-    overlay.style.display='none';
-    cancelAnimationFrame(raf);
-    vscode.postMessage({command:'closeGeoViewer'});
-  });
-
-  canvas.addEventListener('mousedown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
-  window.addEventListener('mousemove',e=>{
-    if(!dragging)return;
-    rotY+=(e.clientX-lastX)*0.01;
-    rotX+=(e.clientY-lastY)*0.01;
-    lastX=e.clientX;lastY=e.clientY;
-  });
-  window.addEventListener('mouseup',()=>dragging=false);
-  canvas.addEventListener('wheel',e=>{zoom*=e.deltaY>0?0.9:1.1;zoom=Math.max(0.1,Math.min(10,zoom));e.preventDefault();},{passive:false});
-
-  function initGL(){
-    gl=canvas.getContext('webgl')||canvas.getContext('experimental-webgl');
-    if(!gl)return false;
-    const vs=gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vs,\`
-      attribute vec3 aPos;
-      attribute vec3 aNorm;
-      uniform mat4 uMVP;
-      uniform mat4 uModel;
-      varying vec3 vNorm;
-      void main(){
-        vNorm=normalize((uModel*vec4(aNorm,0.0)).xyz);
-        gl_Position=uMVP*vec4(aPos,1.0);
-      }
-    \`);
-    gl.compileShader(vs);
-    const fs_=gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fs_,\`
-      precision mediump float;
-      varying vec3 vNorm;
-      void main(){
-        vec3 light=normalize(vec3(0.5,1.0,0.8));
-        float d=max(dot(vNorm,light),0.0)*0.7+0.3;
-        gl_FragColor=vec4(d*0.5,d*0.75,d,1.0);
-      }
-    \`);
-    gl.compileShader(fs_);
-    prog=gl.createProgram();
-    gl.attachShader(prog,vs);gl.attachShader(prog,fs_);
-    gl.linkProgram(prog);gl.useProgram(prog);
-    vBuf=gl.createBuffer();nBuf=gl.createBuffer();
-    gl.enable(gl.DEPTH_TEST);
-    return true;
-  }
-
-  function mat4mul(a,b){
-    const r=new Float32Array(16);
-    for(let i=0;i<4;i++)for(let j=0;j<4;j++){
-      let s=0;for(let k=0;k<4;k++)s+=a[i*4+k]*b[k*4+j];r[i*4+j]=s;
-    }return r;
-  }
-  function mat4persp(fov,asp,n,f){
-    const t=Math.tan(fov/2);
-    return new Float32Array([
-      1/(asp*t),0,0,0,  0,1/t,0,0,
-      0,0,-(f+n)/(f-n),-1,  0,0,-2*f*n/(f-n),0
-    ]);
-  }
-  function mat4rotX(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]);}
-  function mat4rotY(a){const c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);}
-  function mat4scale(sx,sy,sz){return new Float32Array([sx,0,0,0, 0,sy,0,0, 0,0,sz,0, 0,0,0,1]);}
-  function mat4trans(tx,ty,tz){return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, tx,ty,tz,1]);}
-
-  function render(verts,norms){
-    canvas.width=canvas.clientWidth;canvas.height=canvas.clientHeight;
-    gl.viewport(0,0,canvas.width,canvas.height);
-    gl.clearColor(0.07,0.07,0.1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-
-    const asp=canvas.width/canvas.height;
-    const P=mat4persp(Math.PI/4,asp,0.01,100);
-    const T=mat4trans(0,0,-3/zoom);
-    const RX=mat4rotX(rotX),RY=mat4rotY(rotY);
-    const M=mat4mul(RY,RX);
-    const MVP=mat4mul(P,mat4mul(T,M));
-
-    const aPos=gl.getAttribLocation(prog,'aPos');
-    const aNorm=gl.getAttribLocation(prog,'aNorm');
-    gl.bindBuffer(gl.ARRAY_BUFFER,vBuf);
-    gl.bufferData(gl.ARRAY_BUFFER,verts,gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(aPos);gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
-    gl.bindBuffer(gl.ARRAY_BUFFER,nBuf);
-    gl.bufferData(gl.ARRAY_BUFFER,norms,gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(aNorm);gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0);
-
-    gl.uniformMatrix4fv(gl.getUniformLocation(prog,'uMVP'),false,MVP);
-    gl.uniformMatrix4fv(gl.getUniformLocation(prog,'uModel'),false,M);
-    gl.drawArrays(gl.TRIANGLES,0,verts.length/3);
-  }
-
-  function animate(verts,norms){
-    raf=requestAnimationFrame(()=>animate(verts,norms));
-    render(verts,norms);
-  }
-
-  function b64ToBytes(b64){
-    const bin=atob(b64);const u=new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;
-  }
-
-  function parseSTLBinary(buf){
-    const view=new DataView(buf.buffer||buf);
-    const n=view.getUint32(80,true);
-    const verts=new Float32Array(n*9),norms=new Float32Array(n*9);
-    let xMin=Infinity,xMax=-Infinity,yMin=Infinity,yMax=-Infinity,zMin=Infinity,zMax=-Infinity;
-    for(let i=0;i<n;i++){
-      const base=84+i*50;
-      const nx=view.getFloat32(base,true),ny=view.getFloat32(base+4,true),nz=view.getFloat32(base+8,true);
-      for(let v=0;v<3;v++){
-        const vb=base+12+v*12;
-        const x=view.getFloat32(vb,true),y=view.getFloat32(vb+4,true),z=view.getFloat32(vb+8,true);
-        const idx=(i*3+v)*3;
-        verts[idx]=x;verts[idx+1]=y;verts[idx+2]=z;
-        norms[idx]=nx;norms[idx+1]=ny;norms[idx+2]=nz;
-        if(x<xMin)xMin=x;if(x>xMax)xMax=x;
-        if(y<yMin)yMin=y;if(y>yMax)yMax=y;
-        if(z<zMin)zMin=z;if(z>zMax)zMax=z;
-      }
-    }
-    // Centre and normalise
-    const cx=(xMin+xMax)/2,cy=(yMin+yMax)/2,cz=(zMin+zMax)/2;
-    const sc=2/Math.max(xMax-xMin,yMax-yMin,zMax-zMin,0.001);
-    for(let i=0;i<verts.length;i+=3){verts[i]=(verts[i]-cx)*sc;verts[i+1]=(verts[i+1]-cy)*sc;verts[i+2]=(verts[i+2]-cz)*sc;}
-    return {verts,norms,triCount:n};
-  }
-
-  function parseSTLAscii(text){
-    const lines=text.split('\\n');
-    const pos=[],nrm=[];
-    let cn=[0,0,1];
-    for(const ln of lines){
-      const t=ln.trim();
-      if(t.startsWith('facet normal')){const p=t.split(/\\s+/);cn=[+p[2],+p[3],+p[4]];}
-      else if(t.startsWith('vertex ')){const p=t.split(/\\s+/);pos.push(+p[1],+p[2],+p[3]);nrm.push(...cn);}
-    }
-    if(!pos.length)return null;
-    let xMin=Infinity,xMax=-Infinity,yMin=Infinity,yMax=-Infinity,zMin=Infinity,zMax=-Infinity;
-    for(let i=0;i<pos.length;i+=3){
-      if(pos[i]<xMin)xMin=pos[i];if(pos[i]>xMax)xMax=pos[i];
-      if(pos[i+1]<yMin)yMin=pos[i+1];if(pos[i+1]>yMax)yMax=pos[i+1];
-      if(pos[i+2]<zMin)zMin=pos[i+2];if(pos[i+2]>zMax)zMax=pos[i+2];
-    }
-    const cx=(xMin+xMax)/2,cy=(yMin+yMax)/2,cz=(zMin+zMax)/2;
-    const sc=2/Math.max(xMax-xMin,yMax-yMin,zMax-zMin,0.001);
-    const verts=new Float32Array(pos.length);
-    for(let i=0;i<pos.length;i+=3){verts[i]=(pos[i]-cx)*sc;verts[i+1]=(pos[i+1]-cy)*sc;verts[i+2]=(pos[i+2]-cz)*sc;}
-    return {verts,norms:new Float32Array(nrm),triCount:pos.length/9};
-  }
-
-  window.addEventListener('message',ev=>{
-    const msg=ev.data;
-    if(msg.command==='previewGeometry'){
-      overlay.style.display='flex';
-      label.textContent=msg.fileName||'';
-      if(!gl&&!initGL()){label.textContent='WebGL not supported';return;}
-      cancelAnimationFrame(raf);
-      const bytes=b64ToBytes(msg.dataBase64);
-      let parsed=null;
-      if(msg.isBinary){
-        parsed=parseSTLBinary(bytes);
-      } else {
-        const text=new TextDecoder().decode(bytes);
-        parsed=parseSTLAscii(text);
-      }
-      if(!parsed){label.textContent='Could not parse geometry';return;}
-      label.textContent=\`\${msg.fileName} — \${parsed.triCount.toLocaleString()} triangles  |  drag to rotate  |  scroll to zoom\`;
-      animate(parsed.verts,parsed.norms);
-    }
-    if(msg.command==='hideGeoViewer'){
-      overlay.style.display='none';
-      cancelAnimationFrame(raf);
-    }
-  });
-})();
 </script>
+
+<script nonce="${nonce}" src="${geoViewerUri}"></script>
 </body>
 </html>`;
   }

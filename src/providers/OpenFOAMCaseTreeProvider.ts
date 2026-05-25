@@ -13,12 +13,15 @@ export class CaseItem extends vscode.TreeItem {
     if (resourceUri) {
       this.resourceUri = resourceUri;
       if (!isDirectory) {
+        const ext = path.extname(label).toLowerCase();
+        const isGeometry = ['.stl', '.obj', '.vtk'].includes(ext);
         this.command = {
-          command: 'vscode.open',
-          title: 'Open File',
+          command: isGeometry ? 'openfoam.previewGeometry' : 'vscode.open',
+          title: isGeometry ? 'Preview Geometry' : 'Open File',
           arguments: [resourceUri],
         };
         this.tooltip = resourceUri.fsPath;
+        if (isGeometry) this.iconPath = new vscode.ThemeIcon('eye');
       }
     }
     this.iconPath = isDirectory

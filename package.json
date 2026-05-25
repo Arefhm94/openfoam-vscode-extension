@@ -194,13 +194,21 @@
       "properties": {
         "openfoam.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Traces the communication between VS Code and the OpenFOAM language server."
         },
         "openfoam.diagnosticsLevel": {
           "type": "string",
-          "enum": ["minimal", "standard", "strict"],
+          "enum": [
+            "minimal",
+            "standard",
+            "strict"
+          ],
           "default": "standard",
           "description": "Diagnostics verbosity: minimal = errors only, standard = errors + warnings, strict = all checks."
         },
@@ -234,7 +242,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -b",
+    "compile": "tsc -b && npx esbuild src/webview/geoViewer.ts --bundle --format=iife --outfile=media/geo-viewer.js",
     "watch": "tsc -b -w",
     "pretest": "npm run compile",
     "extract-keywords": "node out/extractor/extractKeywords.js",
@@ -247,7 +255,9 @@
     "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
+    "esbuild": "^0.28.0",
     "eslint": "^8.0.0",
+    "three": "^0.184.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
