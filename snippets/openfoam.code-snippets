@@ -1,0 +1,250 @@
+{
+  "FoamFile header": {
+    "prefix": "of-foamfile",
+    "description": "Standard FoamFile header block",
+    "body": [
+      "FoamFile",
+      "{",
+      "    version     2.0;",
+      "    format      ascii;",
+      "    class       dictionary;",
+      "    location    \"${1:system}\";",
+      "    object      ${2:fileName};",
+      "}"
+    ]
+  },
+
+  "SIMPLE fvSolution": {
+    "prefix": "of-simple",
+    "description": "Complete SIMPLE algorithm fvSolution block",
+    "body": [
+      "solvers",
+      "{",
+      "    p",
+      "    {",
+      "        solver          GAMG;",
+      "        smoother        GaussSeidel;",
+      "        tolerance       1e-06;",
+      "        relTol          0.1;",
+      "    }",
+      "    U",
+      "    {",
+      "        solver          smoothSolver;",
+      "        smoother        symGaussSeidel;",
+      "        tolerance       1e-08;",
+      "        relTol          0.1;",
+      "    }",
+      "}",
+      "",
+      "SIMPLE",
+      "{",
+      "    nNonOrthogonalCorrectors 0;",
+      "    consistent      yes;",
+      "    residualControl",
+      "    {",
+      "        p               1e-4;",
+      "        U               1e-4;",
+      "    }",
+      "}",
+      "",
+      "relaxationFactors",
+      "{",
+      "    fields  { p 0.3; }",
+      "    equations  { U 0.7; k 0.7; omega 0.7; }",
+      "}"
+    ]
+  },
+
+  "PIMPLE fvSolution": {
+    "prefix": "of-pimple",
+    "description": "Complete PIMPLE algorithm fvSolution block",
+    "body": [
+      "solvers",
+      "{",
+      "    p",
+      "    {",
+      "        solver          GAMG;",
+      "        smoother        GaussSeidel;",
+      "        tolerance       1e-06;",
+      "        relTol          0.05;",
+      "    }",
+      "    pFinal",
+      "    {",
+      "        \\$p;",
+      "        relTol          0;",
+      "    }",
+      "    U",
+      "    {",
+      "        solver          PBiCGStab;",
+      "        preconditioner  DILU;",
+      "        tolerance       1e-08;",
+      "        relTol          0;",
+      "    }",
+      "}",
+      "",
+      "PIMPLE",
+      "{",
+      "    nOuterCorrectors    ${1:1};",
+      "    nCorrectors         ${2:2};",
+      "    nNonOrthogonalCorrectors ${3:1};",
+      "}"
+    ]
+  },
+
+  "fvSchemes RANS": {
+    "prefix": "of-fvschemes-rans",
+    "description": "Recommended fvSchemes for RANS simulations",
+    "body": [
+      "ddtSchemes   { default Euler; }",
+      "",
+      "gradSchemes",
+      "{",
+      "    default         Gauss linear;",
+      "    grad(U)         cellLimited Gauss linear 1;",
+      "}",
+      "",
+      "divSchemes",
+      "{",
+      "    default         none;",
+      "    div(phi,U)      Gauss linearUpwind grad(U);",
+      "    div(phi,k)      Gauss upwind;",
+      "    div(phi,omega)  Gauss upwind;",
+      "    div(phi,epsilon) Gauss upwind;",
+      "    div((nuEff*dev2(T(grad(U))))) Gauss linear;",
+      "}",
+      "",
+      "laplacianSchemes { default Gauss linear corrected; }",
+      "interpolationSchemes { default linear; }",
+      "snGradSchemes    { default corrected; }",
+      "fluxRequired     { default no; p ; }"
+    ]
+  },
+
+  "fvSchemes LES": {
+    "prefix": "of-fvschemes-les",
+    "description": "Recommended fvSchemes for LES simulations",
+    "body": [
+      "ddtSchemes   { default backward; }",
+      "",
+      "gradSchemes  { default Gauss linear; }",
+      "",
+      "divSchemes",
+      "{",
+      "    default         none;",
+      "    div(phi,U)      Gauss LUST unlimitedGrad(U);",
+      "    div(phi,k)      Gauss upwind;",
+      "    div(B)          Gauss linear;",
+      "    div((nuEff*dev2(T(grad(U))))) Gauss linear;",
+      "}",
+      "",
+      "laplacianSchemes { default Gauss linear corrected; }",
+      "interpolationSchemes { default linear; }",
+      "snGradSchemes    { default corrected; }"
+    ]
+  },
+
+  "kOmegaSST boundary conditions": {
+    "prefix": "of-komegasst-bc",
+    "description": "kOmegaSST wall and inlet BCs (k, omega, nut)",
+    "body": [
+      "// k",
+      "inlet  { type fixedValue; value uniform ${1:0.1}; }",
+      "wall   { type kqRWallFunction; value uniform 0; }",
+      "",
+      "// omega",
+      "inlet  { type fixedValue; value uniform ${2:1}; }",
+      "wall   { type omegaWallFunction; value uniform 1; }",
+      "",
+      "// nut",
+      "inlet  { type calculated; value uniform 0; }",
+      "wall   { type nutkWallFunction; value uniform 0; }"
+    ]
+  },
+
+  "kEpsilon boundary conditions": {
+    "prefix": "of-kepsilon-bc",
+    "description": "kEpsilon wall and inlet BCs (k, epsilon, nut)",
+    "body": [
+      "// k",
+      "inlet  { type fixedValue; value uniform ${1:0.1}; }",
+      "wall   { type kqRWallFunction; value uniform 0; }",
+      "",
+      "// epsilon",
+      "inlet  { type fixedValue; value uniform ${2:1}; }",
+      "wall   { type epsilonWallFunction; value uniform 1; }",
+      "",
+      "// nut",
+      "inlet  { type calculated; value uniform 0; }",
+      "wall   { type nutkWallFunction; value uniform 0; }"
+    ]
+  },
+
+  "decomposeParDict scotch": {
+    "prefix": "of-decompose-scotch",
+    "description": "decomposeParDict using scotch method",
+    "body": [
+      "FoamFile",
+      "{",
+      "    version     2.0;",
+      "    format      ascii;",
+      "    class       dictionary;",
+      "    object      decomposeParDict;",
+      "}",
+      "",
+      "numberOfSubdomains  ${1:4};",
+      "method              scotch;"
+    ]
+  },
+
+  "blockMesh hex block": {
+    "prefix": "of-blockmesh-hex",
+    "description": "blockMesh hex block with simple grading",
+    "body": [
+      "hex (${1:0 1 2 3 4 5 6 7})",
+      "    (${2:10} ${3:10} ${4:10})",
+      "    simpleGrading (${5:1} ${6:1} ${7:1})"
+    ]
+  },
+
+  "interFoam divSchemes": {
+    "prefix": "of-interfoam-schemes",
+    "description": "interFoam divSchemes with MULES compression",
+    "body": [
+      "divSchemes",
+      "{",
+      "    default         none;",
+      "    div(rhoPhi,U)   Gauss linearUpwind grad(U);",
+      "    div(phi,alpha)  Gauss interfaceCompression ${1:1};",
+      "    div(nHatf)      Gauss linear;",
+      "    div(phi,k)      Gauss upwind;",
+      "    div(phi,omega)  Gauss upwind;",
+      "    div((muEff*dev2(T(grad(U))))) Gauss linear;",
+      "}"
+    ]
+  },
+
+  "fixedValue BC": {
+    "prefix": "of-fixedvalue",
+    "description": "fixedValue boundary condition block",
+    "body": [
+      "${1:patchName}",
+      "{",
+      "    type            fixedValue;",
+      "    value           uniform ${2:0};",
+      "}"
+    ]
+  },
+
+  "flowRateInletVelocity BC": {
+    "prefix": "of-inlet-velocity",
+    "description": "flowRateInletVelocity boundary condition block",
+    "body": [
+      "${1:inlet}",
+      "{",
+      "    type            flowRateInletVelocity;",
+      "    volumetricFlowRate ${2:0.01};",
+      "    value           uniform (0 0 0);",
+      "}"
+    ]
+  }
+}

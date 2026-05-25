@@ -3,11 +3,14 @@ import {
   CompletionItem, CompletionItemKind, TextDocumentPositionParams,
   TextDocumentSyncKind, Hover, MarkupKind, SignatureHelp, SignatureInformation,
   ParameterInformation, InitializeResult, Diagnostic, DiagnosticSeverity,
-  Range, Position,
+  Range, Position, Location, Definition, DocumentLink, DocumentLinkParams,
+  CodeAction, CodeActionKind, CodeActionParams, TextEdit, WorkspaceEdit,
+  RenameParams, DocumentFormattingParams,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as path from "path";
+import { findCaseRoot, resolveInclude, resolveVariable, uriToPath } from './caseContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -725,6 +728,11 @@ class OpenFOAMLanguageServer {
     this.conn.onCompletion(this.onCompletion.bind(this));
     this.conn.onCompletionResolve(i => i);
     this.conn.onSignatureHelp(this.onSigHelp.bind(this));
+    this.conn.onDefinition(this.onDefinition.bind(this));
+    this.conn.onDocumentLinks(this.onDocumentLinks.bind(this));
+    this.conn.onCodeAction(this.onCodeAction.bind(this));
+    this.conn.onDocumentFormatting(this.onDocumentFormatting.bind(this));
+    this.conn.onRenameRequest(this.onRename.bind(this));
     this.docs.onDidChangeContent(e => this.scheduleDiagnostics(e.document));
     this.docs.onDidOpen(e => this.scheduleDiagnostics(e.document));
     this.docs.listen(this.conn);
@@ -740,6 +748,11 @@ class OpenFOAMLanguageServer {
         hoverProvider: true,
         completionProvider: { resolveProvider: false, triggerCharacters: [" ", "\n", "{"] },
         signatureHelpProvider: { triggerCharacters: [" "] },
+        definitionProvider: true,
+        documentLinkProvider: { resolveProvider: false },
+        codeActionProvider: true,
+        documentFormattingProvider: true,
+        renameProvider: true,
       },
     };
   }
@@ -839,8 +852,45 @@ class OpenFOAMLanguageServer {
     const doc = this.docs.get(params.textDocument.uri);
     if (!doc || !this.db) return null;
 
+    const lineText = doc.getText({
+      start: { line: params.position.line, character: 0 },
+      end: { line: params.position.line, character: 2000 },
+    });
+
+    // #include line → show resolved path + first few lines
+    const inclM = lineText.match(/#include\s+["<]([^">]+)[">]/);
+    if (inclM) {
+      const caseRoot = findCaseRoot(doc.uri);
+      const resolved = resolveInclude(inclM[1], doc.uri, caseRoot);
+      if (resolved) {
+        let preview = '';
+        try {
+          const first = fs.readFileSync(resolved, 'utf-8').split('\n').slice(0, 6).join('\n');
+          preview = `\n\n\`\`\`\n${first}\n...\n\`\`\``;
+        } catch { /* skip */ }
+        return { contents: { kind: MarkupKind.Markdown, value: `**Included file:** \`${resolved}\`${preview}` } };
+      }
+      return { contents: { kind: MarkupKind.Markdown, value: `**#include** \`${inclM[1]}\` *(file not found)*` } };
+    }
+
     const word = this.wordAt(doc, params.position);
     if (!word) return null;
+
+    // $variable → show value + origin
+    const text = doc.getText();
+    const offset = doc.offsetAt(params.position);
+    let wordStart = offset;
+    while (wordStart > 0 && /\w/.test(text[wordStart - 1])) wordStart--;
+    if (wordStart > 0 && text[wordStart - 1] === '$') {
+      const caseRoot = findCaseRoot(doc.uri);
+      const varDef = resolveVariable(word, doc.uri, caseRoot);
+      if (varDef) {
+        const src = path.basename(uriToPath(varDef.uri));
+        return { contents: { kind: MarkupKind.Markdown,
+          value: `**$${word}** = \`${varDef.value}\`\n\n*(defined in ${src}, line ${varDef.line + 1})*` } };
+      }
+      return { contents: { kind: MarkupKind.Markdown, value: `**$${word}** *(variable not found)*` } };
+    }
 
     const md = this.lookupHover(word, doc);
     if (!md) return null;
@@ -1138,6 +1188,10 @@ class OpenFOAMLanguageServer {
     if (ft === 'fvSolution') this.diagFvSolution(lines, diags);
     if (ft === 'controlDict') this.diagControlDict(lines, diags);
     if (ft === 'turbulenceProperties') this.diagTurbulence(text, lines, diags);
+    if (ft === 'boundaryField') this.diagBoundaryField(doc, lines, diags);
+    if (ft === 'blockMeshDict') this.diagBlockMesh(lines, diags);
+    if (ft === 'decomposeParDict') this.diagDecomposePar(lines, diags);
+    this.diagIncludes(doc, lines, diags);
 
     return diags;
   }
@@ -1254,6 +1308,327 @@ class OpenFOAMLanguageServer {
     }
   }
 
+  // ── Document Links (#include clickable) ──────────────────────────────────
+  private onDocumentLinks(params: DocumentLinkParams): DocumentLink[] {
+    const doc = this.docs.get(params.textDocument.uri);
+    if (!doc) return [];
+    const caseRoot = findCaseRoot(doc.uri);
+    const links: DocumentLink[] = [];
+    const text = doc.getText();
+    const re = /#include\s+["<]([^">]+)[">]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const resolved = resolveInclude(m[1], doc.uri, caseRoot);
+      if (!resolved) continue;
+      const pathStart = m.index + m[0].indexOf(m[1]);
+      const range: Range = {
+        start: doc.positionAt(pathStart),
+        end: doc.positionAt(pathStart + m[1].length),
+      };
+      links.push({ range, target: 'file://' + resolved });
+    }
+    return links;
+  }
+
+  // ── Definition (go-to) ────────────────────────────────────────────────────
+  private onDefinition(params: TextDocumentPositionParams): Definition | null {
+    const doc = this.docs.get(params.textDocument.uri);
+    if (!doc) return null;
+    const caseRoot = findCaseRoot(doc.uri);
+    const lineText = doc.getText({
+      start: { line: params.position.line, character: 0 },
+      end: { line: params.position.line, character: 2000 },
+    });
+
+    // #include line
+    const inclM = lineText.match(/#include\s+["<]([^">]+)[">]/);
+    if (inclM) {
+      const resolved = resolveInclude(inclM[1], doc.uri, caseRoot);
+      if (resolved) return Location.create('file://' + resolved, { start: {line:0,character:0}, end: {line:0,character:0} });
+      return null;
+    }
+
+    // $variable
+    const word = this.wordAt(doc, params.position);
+    if (!word) return null;
+    const text = doc.getText();
+    const offset = doc.offsetAt(params.position);
+    let wordStart = offset;
+    while (wordStart > 0 && /\w/.test(text[wordStart - 1])) wordStart--;
+    if (wordStart > 0 && text[wordStart - 1] === '$') {
+      const varDef = resolveVariable(word, doc.uri, caseRoot);
+      if (varDef) return Location.create(varDef.uri, {
+        start: { line: varDef.line, character: 0 },
+        end: { line: varDef.line, character: 1000 },
+      });
+    }
+    return null;
+  }
+
+  // ── Code Actions ─────────────────────────────────────────────────────────
+  private onCodeAction(params: CodeActionParams): CodeAction[] {
+    const doc = this.docs.get(params.textDocument.uri);
+    if (!doc) return [];
+    const actions: CodeAction[] = [];
+
+    for (const diag of params.context.diagnostics) {
+      if (diag.source !== 'openfoam') continue;
+
+      if (diag.message === 'Missing FoamFile header block') {
+        const obj = path.basename(uriToPath(doc.uri));
+        const header = `FoamFile\n{\n    version     2.0;\n    format      ascii;\n    class       dictionary;\n    object      ${obj};\n}\n`;
+        actions.push({
+          title: 'Add FoamFile header',
+          kind: CodeActionKind.QuickFix,
+          diagnostics: [diag],
+          isPreferred: true,
+          edit: { changes: { [doc.uri]: [TextEdit.insert({ line: 0, character: 0 }, header)] } },
+        });
+      }
+
+      if (diag.message.includes('fixedValue') && diag.message.toLowerCase().includes('missing value')) {
+        const ln = diag.range.start.line;
+        actions.push({
+          title: 'Add value keyword',
+          kind: CodeActionKind.QuickFix,
+          diagnostics: [diag],
+          edit: { changes: { [doc.uri]: [TextEdit.insert({ line: ln + 1, character: 0 }, '    value           uniform 0;\n')] } },
+        });
+      }
+    }
+    return actions;
+  }
+
+  // ── Document Formatting ───────────────────────────────────────────────────
+  private onDocumentFormatting(_params: DocumentFormattingParams): TextEdit[] {
+    const doc = this.docs.get(_params.textDocument.uri);
+    if (!doc) return [];
+
+    const rawLines = doc.getText().split('\n');
+    const out: string[] = [];
+    let depth = 0;
+    const ind = (n: number) => '    '.repeat(Math.max(0, n));
+
+    for (const rawLine of rawLines) {
+      const stripped = rawLine.trim();
+      if (!stripped) { out.push(''); continue; }
+
+      const noComment = stripped.replace(/\/\/.*/, '');
+      let opens = 0, closes = 0;
+      for (const ch of noComment) {
+        if (ch === '{') opens++;
+        else if (ch === '}') closes++;
+      }
+
+      // Standalone closing brace(s)
+      if (opens === 0 && closes > 0) {
+        depth = Math.max(0, depth - closes);
+        out.push(ind(depth) + stripped);
+        continue;
+      }
+
+      // Line ending with { — split keyword from brace for OpenFOAM style
+      if (stripped.endsWith('{') && opens === 1 && closes === 0) {
+        const prefix = stripped.slice(0, -1).trim();
+        if (prefix && !prefix.startsWith('//')) {
+          out.push(ind(depth) + prefix);
+          out.push(ind(depth) + '{');
+        } else {
+          out.push(ind(depth) + stripped);
+        }
+        depth++;
+        continue;
+      }
+
+      // Mixed braces on same line
+      if (opens > 0 || closes > 0) {
+        if (closes > opens) depth = Math.max(0, depth - (closes - opens));
+        out.push(ind(depth) + stripped);
+        if (opens > closes) depth += opens - closes;
+        continue;
+      }
+
+      out.push(ind(depth) + stripped);
+    }
+
+    // Collapse 3+ consecutive blank lines to 2
+    const collapsed: string[] = [];
+    let blanks = 0;
+    for (const line of out) {
+      if (!line.trim()) { if (++blanks <= 2) collapsed.push(''); }
+      else { blanks = 0; collapsed.push(line); }
+    }
+
+    const newText = collapsed.join('\n');
+    if (newText === doc.getText()) return [];
+    return [TextEdit.replace(
+      { start: {line:0,character:0}, end: {line: doc.lineCount, character: 0} },
+      newText,
+    )];
+  }
+
+  // ── Rename (patch name across field files) ────────────────────────────────
+  private onRename(params: RenameParams): WorkspaceEdit | null {
+    const doc = this.docs.get(params.textDocument.uri);
+    if (!doc) return null;
+    const word = this.wordAt(doc, params.position);
+    if (!word) return null;
+    const caseRoot = findCaseRoot(doc.uri);
+    if (!caseRoot) return null;
+
+    const changes: Record<string, TextEdit[]> = {};
+    const filesToSearch: string[] = [];
+
+    try {
+      const zeroDir = path.join(caseRoot, '0');
+      if (fs.existsSync(zeroDir)) {
+        for (const f of fs.readdirSync(zeroDir)) {
+          const fp = path.join(zeroDir, f);
+          try { if (fs.statSync(fp).isFile()) filesToSearch.push(fp); } catch { /* skip */ }
+        }
+      }
+    } catch { /* skip */ }
+
+    const polyBoundary = path.join(caseRoot, 'constant', 'polyMesh', 'boundary');
+    if (fs.existsSync(polyBoundary)) filesToSearch.push(polyBoundary);
+
+    const wordRe = new RegExp(`\\b${escapeRegex(word)}\\b`, 'g');
+    for (const fp of filesToSearch) {
+      try {
+        const content = fs.readFileSync(fp, 'utf-8');
+        const fileUri = 'file://' + fp;
+        const edits: TextEdit[] = [];
+        const fileLines = content.split('\n');
+        for (let i = 0; i < fileLines.length; i++) {
+          let m; wordRe.lastIndex = 0;
+          while ((m = wordRe.exec(fileLines[i])) !== null) {
+            edits.push(TextEdit.replace(
+              { start: {line:i,character:m.index}, end: {line:i,character:m.index+word.length} },
+              params.newName,
+            ));
+          }
+        }
+        if (edits.length) changes[fileUri] = edits;
+      } catch { /* skip */ }
+    }
+    return Object.keys(changes).length ? { changes } : null;
+  }
+
+  // ── Boundary field diagnostics ────────────────────────────────────────────
+  private diagBoundaryField(doc: TextDocument, lines: string[], diags: Diagnostic[]) {
+    const caseRoot = findCaseRoot(doc.uri);
+    if (!caseRoot) return;
+    const boundaryFile = path.join(caseRoot, 'constant', 'polyMesh', 'boundary');
+    let boundaryText: string;
+    try { boundaryText = fs.readFileSync(boundaryFile, 'utf-8'); } catch { return; }
+
+    const actualPatches = new Set<string>();
+    const patchRe = /^\s*(\w[\w.]+)\s*\n\s*\{/gm;
+    let pm;
+    while ((pm = patchRe.exec(boundaryText)) !== null) actualPatches.add(pm[1]);
+    if (!actualPatches.size) return;
+
+    let inBF = false, depth = 0;
+    for (let li = 0; li < lines.length; li++) {
+      const ln = stripComments(lines[li]);
+      if (!inBF && /\bboundaryField\b/.test(ln)) { inBF = true; depth = 0; }
+      if (!inBF) continue;
+      for (const ch of ln) {
+        if (ch === '{') depth++;
+        if (ch === '}') depth--;
+      }
+      if (depth === 1) {
+        const nameM = ln.trim().match(/^([\w.]+)\s*$/);
+        if (nameM && nameM[1] !== 'default' && !actualPatches.has(nameM[1])) {
+          diags.push({ range: { start:{line:li,character:0}, end:{line:li,character:lines[li].length} },
+            severity: DiagnosticSeverity.Warning,
+            message: `Patch '${nameM[1]}' not found in constant/polyMesh/boundary`,
+            source: 'openfoam' });
+        }
+      }
+      if (depth <= 0) { inBF = false; depth = 0; }
+    }
+  }
+
+  // ── blockMeshDict diagnostics ─────────────────────────────────────────────
+  private diagBlockMesh(lines: string[], diags: Diagnostic[]) {
+    let vertexCount = 0;
+    let inVerts = false, parenDepth = 0;
+
+    for (const ln of lines.map(l => stripComments(l).trim())) {
+      if (!inVerts && /\bvertices\b/.test(ln)) { inVerts = true; parenDepth = 0; }
+      if (inVerts) {
+        for (const ch of ln) {
+          if (ch === '(') parenDepth++;
+          if (ch === ')') parenDepth--;
+        }
+        if (parenDepth === 1 && /\(/.test(ln)) vertexCount++;
+        if (parenDepth <= 0 && vertexCount > 0) inVerts = false;
+      }
+    }
+    if (!vertexCount) return;
+
+    for (let li = 0; li < lines.length; li++) {
+      const m = stripComments(lines[li]).match(
+        /\bhex\s*\(\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\)/);
+      if (!m) continue;
+      for (let vi = 1; vi <= 8; vi++) {
+        const idx = parseInt(m[vi]);
+        if (idx >= vertexCount) {
+          diags.push({ range: { start:{line:li,character:0}, end:{line:li,character:lines[li].length} },
+            severity: DiagnosticSeverity.Error,
+            message: `Vertex index ${idx} is out of range (${vertexCount} vertices defined)`,
+            source: 'openfoam' });
+          break;
+        }
+      }
+    }
+  }
+
+  // ── decomposeParDict diagnostics ──────────────────────────────────────────
+  private diagDecomposePar(lines: string[], diags: Diagnostic[]) {
+    let method = '', numberOfSubdomains = 0;
+    for (const ln of lines.map(l => stripComments(l).trim())) {
+      const mm = ln.match(/^method\s+(\w+)/);       if (mm) method = mm[1];
+      const nm = ln.match(/^numberOfSubdomains\s+(\d+)/); if (nm) numberOfSubdomains = parseInt(nm[1]);
+    }
+    if (method !== 'simple' || !numberOfSubdomains) return;
+
+    let nVec: number[] | null = null, inCoeffs = false;
+    for (const ln of lines.map(l => stripComments(l).trim())) {
+      if (/\bsimpleCoeffs\b/.test(ln)) inCoeffs = true;
+      if (inCoeffs) {
+        const nm = ln.match(/^n\s+\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\)/);
+        if (nm) { nVec = [parseInt(nm[1]), parseInt(nm[2]), parseInt(nm[3])]; inCoeffs = false; }
+      }
+    }
+    if (nVec) {
+      const product = nVec[0] * nVec[1] * nVec[2];
+      if (product !== numberOfSubdomains) {
+        diags.push({ range: { start:{line:0,character:0}, end:{line:0,character:0} },
+          severity: DiagnosticSeverity.Error,
+          message: `simpleCoeffs n (${nVec.join(' ')}) product = ${product} ≠ numberOfSubdomains = ${numberOfSubdomains}`,
+          source: 'openfoam' });
+      }
+    }
+  }
+
+  // ── #include file existence ───────────────────────────────────────────────
+  private diagIncludes(doc: TextDocument, lines: string[], diags: Diagnostic[]) {
+    const caseRoot = findCaseRoot(doc.uri);
+    for (let li = 0; li < lines.length; li++) {
+      const m = lines[li].match(/#include\s+["<]([^">]+)[">]/);
+      if (!m) continue;
+      const resolved = resolveInclude(m[1], doc.uri, caseRoot);
+      if (!resolved) {
+        diags.push({ range: { start:{line:li,character:0}, end:{line:li,character:lines[li].length} },
+          severity: DiagnosticSeverity.Error,
+          message: `#include: cannot find "${m[1]}"`,
+          source: 'openfoam' });
+      }
+    }
+  }
+
   // ── Utilities ─────────────────────────────────────────────────────────────
   private wordAt(doc: TextDocument, pos: Position): string | null {
     const text = doc.getText();
@@ -1281,6 +1656,10 @@ const FT_MAP: Record<string, OpenFOAMFileType> = {
 function stripComments(line: string): string {
   const i = line.indexOf('//');
   return i >= 0 ? line.slice(0, i) : line;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ── Start ──────────────────────────────────────────────────────────────────

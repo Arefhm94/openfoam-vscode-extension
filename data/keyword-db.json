@@ -1,6 +1,6 @@
 {
   "version": "13",
-  "generatedAt": "2026-05-25T08:24:36.103343+00:00",
+  "generatedAt": "2026-05-25T09:13:30.762696+00:00",
   "contexts": {
     "fvSchemes.gradSchemes.*": {
       "schemes": {
@@ -9735,7 +9735,535 @@
       }
     }
   },
-  "boundaryConditions": {},
+  "boundaryConditions": {
+    "fixedValue": {
+      "brief": "Dirichlet \u2014 prescribes a fixed value at the boundary",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor",
+        "symmTensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field",
+          "description": "Prescribed boundary value (uniform <val> or nonuniform List)"
+        }
+      }
+    },
+    "zeroGradient": {
+      "brief": "Neumann \u2014 zero normal gradient (\u2202\u03c6/\u2202n = 0)",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "noSlip": {
+      "brief": "No-slip wall condition for velocity \u2014 sets U = (0 0 0)",
+      "appliesTo": [
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "slip": {
+      "brief": "Free-slip wall \u2014 zero normal component, unconstrained tangential",
+      "appliesTo": [
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "inletOutlet": {
+      "brief": "Mixed \u2014 fixedValue on inflow, zeroGradient on outflow",
+      "appliesTo": [
+        "scalar",
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "inletValue": {
+          "required": true,
+          "type": "field",
+          "description": "Value applied when flow is into the domain"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "outletInlet": {
+      "brief": "Mixed \u2014 zeroGradient on outflow, fixedValue on inflow",
+      "appliesTo": [
+        "scalar",
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "outletValue": {
+          "required": true,
+          "type": "field"
+        },
+        "value": {
+          "required": false,
+          "type": "field"
+        }
+      }
+    },
+    "pressureInletOutletVelocity": {
+      "brief": "Velocity for pressure-driven patches \u2014 extrapolates outflow, derives inflow from flux",
+      "appliesTo": [
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "flowRateInletVelocity": {
+      "brief": "Inlet velocity derived from volumetric or mass flow rate",
+      "appliesTo": [
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "volumetricFlowRate": {
+          "required": false,
+          "type": "scalar",
+          "description": "Volumetric flow rate [m\u00b3/s]"
+        },
+        "massFlowRate": {
+          "required": false,
+          "type": "scalar",
+          "description": "Mass flow rate [kg/s]"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "totalPressure": {
+      "brief": "Total (stagnation) pressure BC \u2014 maintains specified p0 by adjusting static p",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "p0": {
+          "required": true,
+          "type": "scalar",
+          "description": "Total pressure value"
+        },
+        "U": {
+          "required": true,
+          "type": "word",
+          "description": "Velocity field name"
+        },
+        "phi": {
+          "required": false,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "fixedFluxPressure": {
+      "brief": "Adjusts pressure gradient to maintain specified flux \u2014 use at walls with body forces",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": false,
+          "type": "field"
+        }
+      }
+    },
+    "prghTotalPressure": {
+      "brief": "Total pressure BC for p_rgh (pressure minus hydrostatic head)",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "p0": {
+          "required": true,
+          "type": "scalar"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "kqRWallFunction": {
+      "brief": "Wall function for k, q, R \u2014 log-law based near-wall TKE",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "omegaWallFunction": {
+      "brief": "Wall function for \u03c9 \u2014 near-wall specific dissipation rate from y\u207a",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "epsilonWallFunction": {
+      "brief": "Wall function for \u03b5 \u2014 near-wall dissipation rate",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "nutkWallFunction": {
+      "brief": "Wall function for \u03bdt based on k \u2014 requires y\u207a \u2248 30\u2013300",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "nutLowReWallFunction": {
+      "brief": "Low-Re wall function for \u03bdt \u2014 blends sublayer and log-law regimes",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "nutUSpaldingWallFunction": {
+      "brief": "Spalding's law wall function for \u03bdt \u2014 valid for all y\u207a",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "calculated": {
+      "brief": "Derived quantity \u2014 computed from other fields; no user input needed",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "empty": {
+      "brief": "No BC \u2014 used on front/back patches of 2D/axi-symmetric cases",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "wedge": {
+      "brief": "Axisymmetric wedge patch BC",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "cyclic": {
+      "brief": "Periodic BC \u2014 links matching face values across periodic pair",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "cyclicAMI": {
+      "brief": "Periodic BC with arbitrary mesh interface \u2014 non-conformal periodic",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "symmetryPlane": {
+      "brief": "Symmetry plane \u2014 zero normal gradient and normal component",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "symmetry": {
+      "brief": "Symmetry BC \u2014 equivalent to symmetryPlane",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "externalWallHeatFluxTemperature": {
+      "brief": "Wall temperature BC with fixed heat flux or convective heat transfer coefficient",
+      "appliesTo": [
+        "scalar"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "mode": {
+          "required": true,
+          "type": "word",
+          "description": "fixedHeatFlux or coefficient"
+        },
+        "q": {
+          "required": false,
+          "type": "scalar",
+          "description": "Heat flux [W/m\u00b2]"
+        },
+        "h": {
+          "required": false,
+          "type": "scalar",
+          "description": "Heat transfer coefficient [W/m\u00b2K]"
+        },
+        "Ta": {
+          "required": false,
+          "type": "scalar",
+          "description": "Ambient temperature [K]"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "turbulentDFSEMInlet": {
+      "brief": "Divergence-free synthetic eddy method \u2014 generates turbulence from Reynolds stresses",
+      "appliesTo": [
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "delta": {
+          "required": true,
+          "type": "scalar"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "atmBoundaryLayerInletVelocity": {
+      "brief": "Atmospheric boundary layer log-law inlet velocity profile",
+      "appliesTo": [
+        "vector"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        },
+        "flowDir": {
+          "required": true,
+          "type": "vector"
+        },
+        "zDir": {
+          "required": true,
+          "type": "vector"
+        },
+        "Uref": {
+          "required": true,
+          "type": "scalar"
+        },
+        "Zref": {
+          "required": true,
+          "type": "scalar"
+        },
+        "z0": {
+          "required": true,
+          "type": "scalar"
+        },
+        "value": {
+          "required": true,
+          "type": "field"
+        }
+      }
+    },
+    "processor": {
+      "brief": "Parallel processor boundary \u2014 automatically managed by decomposePar",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    },
+    "processorCyclic": {
+      "brief": "Parallel cyclic processor patch \u2014 for parallel periodic boundaries",
+      "appliesTo": [
+        "scalar",
+        "vector",
+        "tensor"
+      ],
+      "keywords": {
+        "type": {
+          "required": true,
+          "type": "word"
+        }
+      }
+    }
+  },
   "turbulenceModels": {
     "RAS": {},
     "LES": {

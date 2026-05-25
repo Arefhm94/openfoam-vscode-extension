@@ -12,6 +12,7 @@ import {
   OpenFOAMInlayHintsProvider,
   executeToggleBoolean,
 } from "./providers/OpenFOAMCodeLensProvider";
+import { OpenFOAMCaseTreeProvider } from "./providers/OpenFOAMCaseTreeProvider";
 
 let client: LanguageClient;
 
@@ -166,6 +167,27 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  // Case Explorer sidebar
+  const caseTreeProvider = new OpenFOAMCaseTreeProvider(context);
+  const caseTreeView = vscode.window.createTreeView('openfoam.caseExplorer', {
+    treeDataProvider: caseTreeProvider,
+    showCollapseAll: true,
+  });
+  const refreshCaseTreeCommand = vscode.commands.registerCommand(
+    'openfoam.refreshCaseTree',
+    () => caseTreeProvider.refresh(),
+  );
+
+  // Format on save
+  const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument(e => {
+    const cfg = vscode.workspace.getConfiguration('openfoam');
+    if (cfg.get<boolean>('formatOnSave') && e.document.languageId === 'openfoam') {
+      e.waitUntil(
+        vscode.commands.executeCommand('editor.action.formatDocument') as Thenable<void>,
+      );
+    }
+  });
+
   // Auto-detect OpenFOAM files based on directory structure
   const autoDetectDisposable = vscode.workspace.onDidOpenTextDocument(
     async (document: vscode.TextDocument) => {
@@ -247,6 +269,9 @@ export function activate(context: vscode.ExtensionContext) {
     inlayHintsProvider,
     toggleBooleanCommand,
     autoDetectDisposable,
+    caseTreeView,
+    refreshCaseTreeCommand,
+    formatOnSaveDisposable,
   );
 
   console.log("OpenFOAM Language Support extension activated");
