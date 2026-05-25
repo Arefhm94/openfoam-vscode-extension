@@ -1,0 +1,157 @@
+{
+  "transport": {
+    "const": {
+      "brief": "Constant transport properties.",
+      "keywords": {
+        "mu": {
+          "type": "scalar",
+          "required": true,
+          "description": "Dynamic viscosity [Pa.s]"
+        },
+        "Pr": {
+          "type": "scalar",
+          "required": true,
+          "description": "Prandtl number"
+        }
+      }
+    },
+    "sutherland": {
+      "brief": "Sutherland's viscosity law.",
+      "keywords": {
+        "As": {
+          "type": "scalar",
+          "required": true
+        },
+        "Ts": {
+          "type": "scalar",
+          "required": true
+        }
+      }
+    },
+    "WLF": {
+      "brief": "Williams-Landel-Ferry model.",
+      "keywords": {
+        "C1": {
+          "type": "scalar",
+          "required": true
+        },
+        "C2": {
+          "type": "scalar",
+          "required": true
+        },
+        "Tref": {
+          "type": "scalar",
+          "required": true
+        }
+      }
+    }
+  },
+  "thermo": {
+    "hConst": {
+      "brief": "Constant specific heat.",
+      "keywords": {
+        "Cp": {
+          "type": "scalar",
+          "required": true
+        },
+        "Hf": {
+          "type": "scalar",
+          "default": "0"
+        }
+      }
+    },
+    "eConst": {
+      "brief": "Constant internal energy.",
+      "keywords": {
+        "Cv": {
+          "type": "scalar",
+          "required": true
+        },
+        "Hf": {
+          "type": "scalar",
+          "default": "0"
+        }
+      }
+    },
+    "janaf": {
+      "brief": "JANAF polynomial thermodynamics.",
+      "keywords": {
+        "Tlow": {
+          "type": "scalar",
+          "required": true
+        },
+        "Thigh": {
+          "type": "scalar",
+          "required": true
+        },
+        "Tcommon": {
+          "type": "scalar",
+          "required": true
+        }
+      }
+    }
+  },
+  "equationOfState": {
+    "perfectGas": {
+      "brief": "Ideal gas equation of state.",
+      "keywords": {}
+    },
+    "incompressiblePerfectGas": {
+      "brief": "Incompressible perfect gas.",
+      "keywords": {
+        "pRef": {
+          "type": "scalar",
+          "required": true
+        }
+      }
+    },
+    "Boussinesq": {
+      "brief": "Boussinesq approximation.",
+      "keywords": {
+        "rho0": {
+          "type": "scalar",
+          "required": true
+        },
+        "T0": {
+          "type": "scalar",
+          "required": true
+        },
+        "beta": {
+          "type": "scalar",
+          "required": true
+        }
+      }
+    },
+    "rPolynomial": {
+      "brief": "Polynomial density.",
+      "keywords": {
+        "C": {
+          "type": "list",
+          "required": true
+        }
+      }
+    }
+  },
+  "validCombinations": [
+    {
+      "transport": "const",
+      "thermo": "hConst",
+      "equationOfState": "perfectGas"
+    },
+    {
+      "transport": "const",
+      "thermo": "hConst",
+      "equationOfState": "incompressiblePerfectGas"
+    },
+    {
+      "transport": "sutherland",
+      "thermo": "janaf",
+      "equationOfState": "perfectGas"
+    },
+    {
+      "transport": "const",
+      "thermo": "eConst",
+      "equationOfState": "perfectGas"
+    }
+  ]
+}

@@ -105,6 +105,21 @@
           "light": "./media/inspector-icon.svg",
           "dark": "./media/inspector-icon.svg"
         }
+      },
+      {
+        "command": "openfoam.rebuildKeywordDb",
+        "title": "OpenFOAM: Rebuild Keyword Database",
+        "icon": "$(database)"
+      },
+      {
+        "command": "openfoam.showSchemeDoc",
+        "title": "OpenFOAM: Show Scheme Documentation",
+        "icon": "$(book)"
+      },
+      {
+        "command": "openfoam.insertTurbulenceBlock",
+        "title": "OpenFOAM: Insert Turbulence Model Block",
+        "icon": "$(symbol-namespace)"
       }
     ],
     "menus": {

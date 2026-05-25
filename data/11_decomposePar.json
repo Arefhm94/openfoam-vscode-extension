@@ -1,0 +1,81 @@
+{
+  "numberOfSubdomains": {
+    "type": "integer",
+    "required": true
+  },
+  "method": {
+    "type": "word",
+    "options": [
+      "scotch",
+      "simple",
+      "hierarchical",
+      "metis",
+      "manual",
+      "multiLevel",
+      "structured"
+    ],
+    "required": true
+  },
+  "simpleCoeffs": {
+    "type": "dict",
+    "keywords": {
+      "n": {
+        "type": "vector",
+        "required": true,
+        "description": "Number of subdomains in each direction"
+      },
+      "delta": {
+        "type": "scalar",
+        "default": 0.001
+      }
+    }
+  },
+  "hierarchicalCoeffs": {
+    "type": "dict",
+    "keywords": {
+      "n": {
+        "type": "vector",
+        "required": true
+      },
+      "delta": {
+        "type": "scalar",
+        "default": 0.001
+      },
+      "order": {
+        "type": "word",
+        "default": "xyz",
+        "description": "Decomposition order: xyz, xzy, yxz, ..."
+      }
+    }
+  },
+  "scotchCoeffs": {
+    "type": "dict",
+    "keywords": {
+      "processorWeights": {
+        "type": "list",
+        "required": false
+      },
+      "strategy": {
+        "type": "word",
+        "required": false
+      }
+    }
+  },
+  "manualCoeffs": {
+    "type": "dict",
+    "keywords": {
+      "dataFile": {
+        "type": "word",
+        "required": true
+      }
+    }
+  },
+  "distributed": {
+    "type": "boolean",
+    "default": false
+  },
+  "roots": {
+    "type": "list",
+    "required": false
+  }
+}

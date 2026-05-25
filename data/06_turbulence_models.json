@@ -1,0 +1,50 @@
+{
+  "RAS": {},
+  "LES": {
+    "simpleFilter": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "anisotropicFilter": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "laplaceFilter": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "IDDESDelta": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "cubeRootVolDelta": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "vanDriestDelta": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "PrandtlDelta": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "maxDeltaxyz": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    },
+    "smoothDelta": {
+      "brief": "",
+      "requiredFields": [],
+      "coefficients": {}
+    }
+  }
+}

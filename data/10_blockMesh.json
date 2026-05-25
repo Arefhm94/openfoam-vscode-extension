@@ -1,0 +1,75 @@
+{
+  "keywords": {
+    "scale": {
+      "type": "scalar",
+      "required": false,
+      "default": 1.0,
+      "description": "Global coordinate scaling factor"
+    },
+    "vertices": {
+      "type": "list",
+      "required": true,
+      "description": "List of vertex coordinates (x y z)"
+    },
+    "blocks": {
+      "type": "list",
+      "required": true,
+      "description": "List of hex blocks: hex (v0..v7) (nx ny nz) simpleGrading (gx gy gz)"
+    },
+    "edges": {
+      "type": "list",
+      "required": false,
+      "description": "Curved edge definitions"
+    },
+    "boundary": {
+      "type": "list",
+      "required": true,
+      "description": "Patch definitions with type and faces"
+    },
+    "mergePatchPairs": {
+      "type": "list",
+      "required": false,
+      "description": "Pairs of patches to merge"
+    },
+    "geometry": {
+      "type": "dict",
+      "required": false,
+      "description": "STL/triSurface geometry for snapping"
+    },
+    "defaultPatch": {
+      "type": "dict",
+      "required": false,
+      "keywords": {
+        "name": {
+          "type": "word"
+        },
+        "type": {
+          "type": "word"
+        }
+      }
+    }
+  },
+  "gradingTypes": [
+    "simpleGrading",
+    "edgeGrading"
+  ],
+  "edgeTypes": [
+    "arc",
+    "spline",
+    "polyLine",
+    "BSpline",
+    "line",
+    "project",
+    "projectCurve"
+  ],
+  "patchTypes": [
+    "patch",
+    "wall",
+    "symmetryPlane",
+    "symmetry",
+    "empty",
+    "wedge",
+    "cyclic",
+    "processor"
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "linearSolvers": {
+    "processorGAMGInterface": {
+      "keywords": {}
+    },
+    "processorCyclicGAMGInterface": {
+      "keywords": {}
+    },
+    "cyclicGAMGInterface": {
+      "keywords": {}
+    },
+    "procFacesGAMGProcAgglomeration": {
+      "keywords": {}
+    },
+    "eagerGAMGProcAgglomeration": {
+      "keywords": {}
+    },
+    "masterCoarsestGAMGProcAgglomeration": {
+      "keywords": {}
+    },
+    "manualGAMGProcAgglomeration": {
+      "keywords": {}
+    },
+    "dummyAgglomeration": {
+      "keywords": {}
+    },
+    "algebraicPairGAMGAgglomeration": {
+      "keywords": {}
+    },
+    "processorGAMGInterfaceField": {
+      "keywords": {}
+    },
+    "processorCyclicGAMGInterfaceField": {
+      "keywords": {}
+    },
+    "cyclicGAMGInterfaceField": {
+      "keywords": {}
+    }
+  },
+  "algorithms": {
+    "SIMPLE": {
+      "keywords": {
+        "nNonOrthogonalCorrectors": {
+          "type": "integer",
+          "default": 0
+        },
+        "consistent": {
+          "type": "boolean",
+          "default": false
+        },
+        "residualControl": {
+          "type": "dict",
+          "description": "Per-field convergence criteria"
+        }
+      }
+    },
+    "PIMPLE": {
+      "keywords": {
+        "nOuterCorrectors": {
+          "type": "integer",
+          "required": true
+        },
+        "nCorrectors": {
+          "type": "integer",
+          "required": true
+        },
+        "nNonOrthogonalCorrectors": {
+          "type": "integer",
+          "default": 0
+        },
+        "turbOnFinalIterOnly": {
+          "type": "boolean",
+          "default": true
+        },
+        "residualControl": {
+          "type": "dict"
+        }
+      }
+    },
+    "PISO": {
+      "keywords": {
+        "nCorrectors": {
+          "type": "integer",
+          "required": true
+        },
+        "nNonOrthogonalCorrectors": {
+          "type": "integer",
+          "default": 0
+        }
+      }
+    },
+    "FLUID": {
+      "keywords": {
+        "nOuterCorrectors": {
+          "type": "integer",
+          "required": true
+        },
+        "residualControl": {
+          "type": "dict"
+        }
+      }
+    }
+  }
+}

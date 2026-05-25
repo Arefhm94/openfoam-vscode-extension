@@ -1,185 +1,161 @@
 # OpenFOAM Language Support for VS Code
 
-<img src="logo.png" alt="OpenFOAM Language Support Logo" width="100">
+<img src="logo.png" alt="OpenFOAM Language Support" width="100">
 
-A comprehensive VS Code extension providing syntax highlighting, IntelliSense, and workflow management for OpenFOAM dictionary files.
+Syntax highlighting, hover documentation, auto-completion, and an interactive inspector panel for OpenFOAM case files.
 
-## ✨ Features
+---
 
-### 🎨 Syntax Highlighting
+## Features
 
-Color-coded tokens for keywords, values, comments, strings, and numbers with full OpenFOAM dictionary syntax support.
+### Syntax Highlighting
 
-### 🧠 IntelliSense
+Token-aware coloring for the full OpenFOAM dictionary format:
 
-- **Hover Information**: Detailed documentation for 100+ OpenFOAM keywords
-- **Auto-Completion**: Context-aware suggestions with parameter templates
-- **Signature Help**: Parameter information while typing
+- `FoamFile` header fields
+- Keywords: `ddtSchemes`, `SIMPLE`, `PIMPLE`, `solvers`, `relaxationFactors`, …
+- Scheme names: `Gauss`, `linearUpwind`, `vanLeer`, `CrankNicolson`, …
+- Turbulence models: `kOmegaSST`, `SpalartAllmaras`, `Smagorinsky`, `WALE`, …
+- Boundary conditions: `fixedValue`, `zeroGradient`, `kqRWallFunction`, `nutkWallFunction`, …
+- Linear solvers and preconditioners: `GAMG`, `PCG`, `PBiCGStab`, `DIC`, `DILU`, …
+- Decomposition methods: `scotch`, `simple`, `hierarchical`, …
+- Dimension sets `[kg m s K mol A cd]`, vectors `(x y z)`, numbers, booleans
+- `$variable` references and `#include` directives
 
-### 📋 Outline View
+### Hover Documentation
 
-Hierarchical document structure with colored icons:
+Hover over any keyword to get a description, valid values, and usage examples. Covered topics include:
 
-- 🔵 **Blue** - FoamFile headers, geometry blocks
-- 🟡 **Yellow** - Scheme blocks (fvSchemes, fvSolution)
-- 🟣 **Purple** - Solver settings, boolean values
-- 🔵 **Cyan** - Mesh controls, numeric values
-- 🟠 **Orange** - Layer controls, string values
-- 🟢 **Green** - Properties, field values
+| Category | Examples |
+|----------|---------|
+| Time schemes | `Euler`, `backward`, `CrankNicolson`, `steadyState`, `localEuler` |
+| Gradient schemes | `Gauss linear`, `leastSquares`, `cellLimited` |
+| Divergence schemes | `Gauss linearUpwind`, `Gauss vanLeer`, `Gauss LUST` |
+| Laplacian / snGrad | `corrected`, `limited corrected 0.333`, `uncorrected` |
+| fvSolution algorithms | `SIMPLE`, `PIMPLE`, `PISO`, `FLUID` |
+| Linear solvers | `GAMG`, `PCG`, `PBiCGStab`, `smoothSolver`, `diagonal` |
+| Preconditioners | `DIC`, `DILU`, `FDIC` |
+| Smoothers | `GaussSeidel`, `symGaussSeidel`, `DICGaussSeidel` |
+| RANS models | `kOmegaSST`, `kEpsilon`, `SpalartAllmaras`, `realizableKE`, `v2f` |
+| LES models | `Smagorinsky`, `WALE`, `dynamicKEqn`, `DDES`, `DES` |
+| Boundary conditions | `fixedValue`, `inletOutlet`, `totalPressure`, `fixedFluxPressure`, all wall functions |
+| Patch types | `wall`, `cyclic`, `cyclicAMI`, `symmetry`, `empty`, `wedge`, `processor` |
+| Decomposition | `scotch`, `simple`, `hierarchical`, `manual` |
+| snappyHexMesh | All sub-dicts: `castellatedMeshControls`, `snapControls`, `addLayersControls`, … |
+| blockMesh | `hex`, `simpleGrading`, `arc`, `spline`, `mergePatchPairs` |
+| Transport / thermo | `Newtonian`, `powerLaw`, `perfectGas`, `janaf`, `sensibleEnthalpy` |
+| Fields | `U`, `p`, `k`, `epsilon`, `omega`, `nut`, `T`, `alpha1`, … |
+| Function objects | `forces`, `forceCoeffs`, `probes`, `yPlus`, `wallShearStress`, `fieldAverage`, … |
+| controlDict | Every control keyword with valid options and defaults |
 
-### 🔧 Workflow Panel
+### Auto-Completion
 
-Interactive case management with parameter editing:
+Context-aware completions with snippet templates:
 
-- **System Files**: controlDict, fvSchemes, fvSolution, helyxHexMeshDict, caseSetupDict
-- **Constant Files**: transportProperties, turbulenceProperties, RASProperties
-- **Boundary Conditions**: All 0/ directory field files
-- **Inline Editing**: Modify parameters directly in the workflow view
+- Inside `ddtSchemes { }` → offers `Euler`, `backward`, `CrankNicolson`, …
+- Inside `gradSchemes { }` → offers `Gauss linear`, `leastSquares`, `cellLimited`, …
+- Inside `divSchemes { }` → offers `Gauss <scheme>` variants
+- Inside `solvers { }` → offers solver names and required keywords
+- Inside `SIMPLE { }` / `PIMPLE { }` → offers algorithm-specific keywords
+- Inside `RAS { }` → lists all RANS model names
+- Inside `boundaryField { }` → lists boundary condition types
+- Inside `controlDict` → all control keywords with defaults
 
-### 📁 Auto-Detection
+### Outline View
 
-Automatically recognizes OpenFOAM files in:
+Hierarchical document structure in the Explorer sidebar (`Ctrl+Shift+O`). Colored icons indicate block type (scheme, solver, boundary, mesh, …).
 
-- `system/` directory (controlDict, fvSchemes, etc.)
-- `constant/` directory (transportProperties, etc.)
-- Time directories (`0/`, `1/`, `0.5/`, etc.)
-- Files without extensions (U, p, k, epsilon, etc.)
+### Inspector Panel
 
-## 🚀 Development
+A visual horizontal tree of any open OpenFOAM dictionary — blocks as collapsible pills, parameters as cards with inline editable values and boolean toggles.
 
-### Quick Install (Recommended)
+Open with: `Ctrl+Shift+P` → **OpenFOAM: Open Inspector**  
+Or click the `$(file-code) OpenFOAM` status bar item.
+
+The panel follows the editor cursor: the node for the block you are currently editing is highlighted automatically.
+
+### Auto-Detection
+
+Files in `system/`, `constant/`, and time directories (`0/`, `1/`, etc.) without an extension are automatically set to the `openfoam` language mode.
+
+---
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `OpenFOAM: Open Inspector` | Open the visual inspector panel |
+| `OpenFOAM: Set Language Mode` | Manually apply OpenFOAM language to the active file |
+| `OpenFOAM: Rebuild Keyword Database` | Re-run extraction scripts against an OpenFOAM source tree |
+| `OpenFOAM: Show Scheme Documentation` | Browse scheme docs via quick-pick |
+| `OpenFOAM: Insert Turbulence Block` | Insert a RAS or LES snippet at the cursor |
+| `OpenFOAM: Refresh Keyword Database` | Reload the keyword database from a compiled extractor |
+
+---
+
+## Supported Files
+
+### system/
+
+`controlDict`, `fvSchemes`, `fvSolution`, `blockMeshDict`, `snappyHexMeshDict`, `decomposeParDict`, `fvOptions`, `topoSetDict`, `setFieldsDict`, `refineMeshDict`
+
+### constant/
+
+`transportProperties`, `turbulenceProperties`, `momentumTransport`, `thermophysicalProperties`, `thermophysicalProperties.gas`, `phaseProperties`, `g`, `RASProperties`
+
+### 0/ (boundary conditions)
+
+`U`, `p`, `p_rgh`, `k`, `epsilon`, `omega`, `nut`, `nuTilda`, `T`, `rho`, `alpha.*`, `G`, `Ii`, and any other field file
+
+---
+
+## Installation
 
 ```bash
-# Download and install the latest .vsix file
-code --install-extension openfoam-language-support-0.4.0.vsix
-```
+# From a .vsix release
+code --install-extension openfoam-language-support-0.4.4.vsix
 
-### From Source
-
-```bash
+# From source
 git clone https://github.com/arefhm94/openfoam-vscode-extension.git
 cd openfoam-vscode-extension
 npm install
 npm run compile
-npm run extract-keywords  # Extract from OpenFOAM source
-code --install-extension openfoam-language-support-0.4.0.vsix
+vsce package
+code --install-extension openfoam-language-support-*.vsix
 ```
-
-## 📖 Usage
-
-### Basic Workflow
-
-1. Open any OpenFOAM case directory
-2. Files automatically detect as OpenFOAM language
-3. Use `Ctrl+Shift+O` for outline navigation
-4. Click the graph icon (📊) for workflow panel
-5. Hover over keywords for documentation
-
-### Outline View Example
-
-![alt text](image-1.png)
-
-### Workflow Panel Example
-
-Activate by ctrl+shift+p and selecting "OpenFOAM: Open Case Workflow"
-
-![alt text](image.png)
-
-## 🔧 Commands
-
-- `OpenFOAM: Open Case Workflow` - Launch interactive workflow panel
-- `OpenFOAM: Refresh Keyword Database` - Update from OpenFOAM source
-- `OpenFOAM: Set Language Mode` - Manually set file language
-
-## 📋 Supported Files
-
-### System Directory
-
-- `controlDict` - Simulation control
-- `fvSchemes` - Discretization schemes
-- `fvSolution` - Solver settings
-- `helyxHexMeshDict` - Helyx mesh generation
-- `caseSetupDict` - Helyx case configuration
-- `fvOptions` - Source terms
-- `topoSetDict` - Topology manipulation
-
-### Constant Directory
-
-- `transportProperties` - Physical properties
-- `turbulenceProperties` - Turbulence models
-- `RASProperties` - Reynolds-Averaged Simulation
-- `phaseProperties` - Multi-phase settings
-- `g` - Gravity vector
-- `momentumTransport` - Transport models
-
-### Boundary Conditions (0/ directory)
-
-- `U` - Velocity field
-- `p`, `p_rgh` - Pressure fields
-- `k`, `epsilon`, `omega` - Turbulence fields
-- `alpha.*` - Phase fraction fields
-- `T` - Temperature field
-
-## 🔄 Version History
-
-### 0.4.0 (Latest)
-
-- ✅ **Colored outline icons** with semantic categorization
-- ✅ **Enhanced Helyx support** (helyxHexMeshDict, caseSetupDict)
-- ✅ **Auto-detection** for files in OpenFOAM directories
-- ✅ **Improved outline parsing** for complex dictionary structures
-
-### 0.3.0
-
-- ✅ **Workflow panel** with parameter editing
-- ✅ **Boundary condition scanning** from 0/ directory
-- ✅ **Inline parameter editing** in workflow view
-
-### 0.2.0
-
-- ✅ **Helyx file support** (RASProperties, regionProperties)
-- ✅ **Extended system files** (fvOptions, topoSetDict, etc.)
-
-### 0.1.0
-
-- ✅ **Basic syntax highlighting** for OpenFOAM dictionaries
-- ✅ **IntelliSense** with 100+ keywords
-- ✅ **Keyword extraction** from OpenFOAM source
-
-## 🛠️ Development
-
-### Project Structure
-
-```text
-├── src/
-│   ├── extension.ts                 # Main extension
-│   ├── workflow/WorkflowPanel.ts    # Workflow UI
-│   ├── providers/                   # Language features
-│   └── extractor/                   # Keyword extraction
-├── syntaxes/openfoam.tmLanguage.json # Syntax grammar
-├── data/openfoam-keywords.json      # Keyword database
-└── examples/                        # Test cases
-```
-
-### Building
-
-```bash
-npm run compile          # Build TypeScript
-npm run extract-keywords # Generate keyword database
-vsce package            # Create .vsix package
-```
-
-## 🤝 Contributing
-
-Contributions welcome! Areas for improvement:
-
-- Keyword coverage expansion
-- Parser improvements (AST-based)
-- Diagnostic capabilities
-- Test coverage
-
-## 📄 License
-
-GPL-3.0 (same as OpenFOAM)
 
 ---
+
+## Rebuilding the Keyword Database
+
+The extension ships with a pre-built `data/keyword-db.json`. To regenerate it from a local OpenFOAM 13 source tree:
+
+1. Run `Ctrl+Shift+P` → **OpenFOAM: Rebuild Keyword Database**
+2. Enter the path to your OpenFOAM 13 source root (e.g. `/path/to/OpenFOAM-13`)
+3. The terminal runs 13 extraction scripts and merges the results
+4. Reload VS Code when complete
+
+---
+
+## Project Structure
+
+```
+src/
+  extension.ts                       # Extension entry point
+  language-server/server.ts          # LSP server (hover, completion, diagnostics)
+  workflow/InspectorPanel.ts         # Visual inspector webview
+  providers/
+    OpenFOAMDocumentSymbolProvider.ts  # Outline view
+    OpenFOAMCodeLensProvider.ts        # Inlay hints / boolean toggles
+  parsers/OpenFOAMParser.ts          # Dictionary parser
+syntaxes/openfoam.tmLanguage.json    # TextMate grammar
+data/keyword-db.json                 # Keyword database
+scripts/                             # Python extraction scripts (01–13)
+examples/                            # Example OpenFOAM cases
+```
+
+---
+
+## License
+
+GPL-3.0 — same as OpenFOAM.

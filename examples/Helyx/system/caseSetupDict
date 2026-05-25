@@ -111,7 +111,7 @@ global {
                 line_sensor_01 {
                     type        uniform;
                     axis        xyz;
-                    nPoints     41;
+                    nPoints     42;
                     start       (507.05 35.539 49.905);
                     end         (507.05 35.539 51.905);
                 }

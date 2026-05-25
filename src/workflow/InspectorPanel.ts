@@ -300,7 +300,7 @@ body{
 .tog input:checked+.tog-t::before{background:var(--vscode-focusBorder);transform:translateX(12px);opacity:1;}
 
 /* ── Edges ── */
-.edge{stroke:var(--vscode-widget-border,var(--vscode-panel-border,rgba(128,128,128,.35)));stroke-width:1;fill:none;}
+.edge{stroke-width:1.5;fill:none;opacity:0.75;}
 
 /* ── Flat block cards ── */
 .fcard{
@@ -339,6 +339,7 @@ const vscode=acquireVsCodeApi();
 
 // ── Layout constants ──────────────────────────────────────────
 const HEAD_H=24,PARAM_H=17,CPAD=10,CGAP=6;
+const EDGE_PALETTE=['#4ec9b0','#c586c0','#ce9178','#9cdcfe','#dcdcaa','#f48771','#b5cea8','#d7ba7d'];
 const CMIN=140,CMAX=280,CCHARW=6.8;
 const PX=8,LEVEL_H=8,TOP_MARGIN=6;
 
@@ -470,11 +471,13 @@ function renderTree(){
   canvas.appendChild(svg);
 
   // Draw orthogonal connectors at their assigned level (no overlaps)
-  for(const conn of conns){
+  for(let ci=0;ci<conns.length;ci++){
+    const conn=conns[ci];
+    const color=EDGE_PALETTE[ci%EDGE_PALETTE.length];
     const barY=PY-(conn.level+1)*LEVEL_H;
-    sline(svg,conn.px,PY,conn.px,barY);
-    sline(svg,conn.minX,barY,conn.maxX,barY);
-    for(const c of conn.bk)sline(svg,xMid(c.id),barY,xMid(c.id),PY);
+    sline(svg,conn.px,PY,conn.px,barY,color);
+    sline(svg,conn.minX,barY,conn.maxX,barY,color);
+    for(const c of conn.bk)sline(svg,xMid(c.id),barY,xMid(c.id),PY,color);
   }
 
   // Render flat block cards
@@ -514,11 +517,12 @@ function renderTree(){
   }
 }
 
-function sline(svg,x1,y1,x2,y2){
+function sline(svg,x1,y1,x2,y2,color){
   const l=document.createElementNS('http://www.w3.org/2000/svg','line');
   l.setAttribute('x1',x1);l.setAttribute('y1',y1);
   l.setAttribute('x2',x2);l.setAttribute('y2',y2);
   l.setAttribute('class','edge');
+  if(color)l.setAttribute('stroke',color);
   svg.appendChild(l);
 }
 

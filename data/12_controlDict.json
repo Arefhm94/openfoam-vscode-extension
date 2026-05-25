@@ -1,0 +1,115 @@
+{
+  "application": {
+    "type": "word",
+    "required": true,
+    "description": "Solver name"
+  },
+  "startFrom": {
+    "type": "word",
+    "required": true,
+    "options": [
+      "firstTime",
+      "startTime",
+      "latestTime"
+    ]
+  },
+  "startTime": {
+    "type": "scalar",
+    "default": 0
+  },
+  "stopAt": {
+    "type": "word",
+    "required": true,
+    "options": [
+      "endTime",
+      "noWriteNow",
+      "writeNow",
+      "nextWrite"
+    ]
+  },
+  "endTime": {
+    "type": "scalar",
+    "required": true
+  },
+  "deltaT": {
+    "type": "scalar",
+    "required": true,
+    "description": "Time step"
+  },
+  "writeControl": {
+    "type": "word",
+    "required": true,
+    "options": [
+      "timeStep",
+      "runTime",
+      "adjustableRunTime",
+      "cpuTime",
+      "clockTime"
+    ]
+  },
+  "writeInterval": {
+    "type": "scalar",
+    "required": true
+  },
+  "purgeWrite": {
+    "type": "integer",
+    "default": 0,
+    "description": "0 = keep all time dirs"
+  },
+  "writeFormat": {
+    "type": "word",
+    "default": "ascii",
+    "options": [
+      "ascii",
+      "binary"
+    ]
+  },
+  "writePrecision": {
+    "type": "integer",
+    "default": 6
+  },
+  "writeCompression": {
+    "type": "boolean",
+    "default": false
+  },
+  "timeFormat": {
+    "type": "word",
+    "default": "general",
+    "options": [
+      "fixed",
+      "scientific",
+      "general"
+    ]
+  },
+  "timePrecision": {
+    "type": "integer",
+    "default": 6
+  },
+  "runTimeModifiable": {
+    "type": "boolean",
+    "default": true
+  },
+  "adjustTimeStep": {
+    "type": "boolean",
+    "default": false
+  },
+  "maxCo": {
+    "type": "scalar",
+    "required": false,
+    "description": "Maximum Courant number"
+  },
+  "maxDeltaT": {
+    "type": "scalar",
+    "required": false
+  },
+  "libs": {
+    "type": "list",
+    "required": false,
+    "description": "Additional shared libraries to load"
+  },
+  "functions": {
+    "type": "dict",
+    "required": false,
+    "description": "Function objects sub-dictionary"
+  }
+}

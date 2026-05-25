@@ -1,0 +1,720 @@
+{
+  "movingForces": {
+    "brief": "",
+    "keywords": {}
+  },
+  "forceCoeffs": {
+    "brief": "",
+    "keywords": {
+      "liftDir": {
+        "required": true
+      },
+      "dragDir": {
+        "required": true
+      },
+      "pitchAxis": {
+        "required": true
+      },
+      "magUInf": {
+        "required": true
+      },
+      "rhoInf": {
+        "required": true
+      },
+      "lRef": {
+        "required": true
+      },
+      "Aref": {
+        "required": true
+      }
+    }
+  },
+  "forces": {
+    "brief": "",
+    "keywords": {
+      "CofR": {
+        "required": true
+      }
+    }
+  },
+  "codedFunctionObject": {
+    "brief": "",
+    "keywords": {}
+  },
+  "timeStep": {
+    "brief": "",
+    "keywords": {}
+  },
+  "setTimeStepFunctionObject": {
+    "brief": "",
+    "keywords": {}
+  },
+  "removeObjects": {
+    "brief": "",
+    "keywords": {
+      "region": {
+        "required": true
+      },
+      "objects": {
+        "required": true
+      }
+    }
+  },
+  "residuals": {
+    "brief": "",
+    "keywords": {
+      "fields": {
+        "required": true
+      }
+    }
+  },
+  "writeDictionary": {
+    "brief": "",
+    "keywords": {
+      "region": {
+        "required": true
+      },
+      "dictNames": {
+        "required": true
+      }
+    }
+  },
+  "checkMesh": {
+    "brief": "",
+    "keywords": {
+      "noTopology": {
+        "required": true
+      },
+      "allGeometry": {
+        "required": true
+      },
+      "allTopology": {
+        "required": true
+      },
+      "writeSurfaces": {
+        "required": true
+      },
+      "writeSets": {
+        "required": true
+      },
+      "nonOrthThreshold": {
+        "required": true
+      },
+      "skewThreshold": {
+        "required": true
+      }
+    }
+  },
+  "time": {
+    "brief": "",
+    "keywords": {
+      "perTimeStep": {
+        "required": true
+      }
+    }
+  },
+  "userTimeStep": {
+    "brief": "",
+    "keywords": {}
+  },
+  "writeObjects": {
+    "brief": "",
+    "keywords": {
+      "region": {
+        "required": true
+      },
+      "field": {
+        "required": true
+      },
+      "fields": {
+        "required": true
+      },
+      "writeOption": {
+        "required": true
+      }
+    }
+  },
+  "setWriteIntervalFunctionObject": {
+    "brief": "",
+    "keywords": {}
+  },
+  "timeActivatedFileUpdate": {
+    "brief": "",
+    "keywords": {
+      "fileToUpdate": {
+        "required": true
+      }
+    }
+  },
+  "systemCall": {
+    "brief": "",
+    "keywords": {
+      "parallel": {
+        "required": true
+      },
+      "executeCalls": {
+        "required": true
+      },
+      "endCalls": {
+        "required": true
+      },
+      "writeCalls": {
+        "required": true
+      }
+    }
+  },
+  "stopAtTimeStep": {
+    "brief": "",
+    "keywords": {}
+  },
+  "stopAtClockTime": {
+    "brief": "",
+    "keywords": {
+      "stopTime": {
+        "required": true
+      }
+    }
+  },
+  "stopAtFile": {
+    "brief": "",
+    "keywords": {
+      "file": {
+        "required": true
+      }
+    }
+  },
+  "mag": {
+    "brief": "",
+    "keywords": {}
+  },
+  "turbulenceIntensity": {
+    "brief": "",
+    "keywords": {}
+  },
+  "power": {
+    "brief": "",
+    "keywords": {
+      "factor": {
+        "required": true
+      }
+    }
+  },
+  "specieFlux": {
+    "brief": "",
+    "keywords": {}
+  },
+  "nearWallFields": {
+    "brief": "",
+    "keywords": {
+      "fields": {
+        "required": true
+      }
+    }
+  },
+  "grad": {
+    "brief": "",
+    "keywords": {}
+  },
+  "bXiProgress": {
+    "brief": "",
+    "keywords": {}
+  },
+  "div": {
+    "brief": "",
+    "keywords": {}
+  },
+  "flowType": {
+    "brief": "",
+    "keywords": {}
+  },
+  "scale": {
+    "brief": "",
+    "keywords": {
+      "scale": {
+        "required": true
+      }
+    }
+  },
+  "enstrophy": {
+    "brief": "",
+    "keywords": {}
+  },
+  "patchCutLayerAverage": {
+    "brief": "",
+    "keywords": {
+      "direction": {
+        "required": true
+      },
+      "distance": {
+        "required": true
+      },
+      "setFormat": {
+        "required": true
+      },
+      "nOptimiseIter": {
+        "required": true
+      }
+    }
+  },
+  "subtract": {
+    "brief": "",
+    "keywords": {}
+  },
+  "multiply": {
+    "brief": "",
+    "keywords": {}
+  },
+  "uniform": {
+    "brief": "",
+    "keywords": {}
+  },
+  "readFields": {
+    "brief": "",
+    "keywords": {
+      "fields": {
+        "required": true
+      }
+    }
+  },
+  "divide": {
+    "brief": "",
+    "keywords": {}
+  },
+  "streamlines": {
+    "brief": "",
+    "keywords": {
+      "fields": {
+        "required": true
+      },
+      "U": {
+        "required": true
+      },
+      "direction": {
+        "required": true
+      },
+      "lifeTime": {
+        "required": true
+      },
+      "nSubCycle": {
+        "required": true
+      },
+      "trackLength": {
+        "required": true
+      },
+      "interpolationScheme": {
+        "required": true
+      },
+      "setFormat": {
+        "required": true
+      }
+    }
+  },
+  "blendingFactor": {
+    "brief": "",
+    "keywords": {}
+  },
+  "writeCellVolumes": {
+    "brief": "",
+    "keywords": {}
+  },
+  "courantNo": {
+    "brief": "",
+    "keywords": {}
+  },
+  "regionSizeDistribution": {
+    "brief": "",
+    "keywords": {
+      "alpha": {
+        "required": true
+      },
+      "patches": {
+        "required": true
+      },
+      "threshold": {
+        "required": true
+      },
+      "maxDiameter": {
+        "required": true
+      },
+      "minDiameter": {
+        "required": true
+      },
+      "nBins": {
+        "required": true
+      },
+      "fields": {
+        "required": true
+      },
+      "setFormat": {
+        "required": true
+      }
+    }
+  },
+  "streamFunction": {
+    "brief": "",
+    "keywords": {}
+  },
+  "xiReactionRate": {
+    "brief": "",
+    "keywords": {}
+  },
+  "reconstruct": {
+    "brief": "",
+    "keywords": {}
+  },
+  "comfort": {
+    "brief": "",
+    "keywords": {
+      "tolerance": {
+        "required": true
+      },
+      "maxClothIter": {
+        "required": true
+      }
+    }
+  },
+  "pressure": {
+    "brief": "",
+    "keywords": {
+      "U": {
+        "required": true
+      },
+      "rho": {
+        "required": true
+      },
+      "rhoInf": {
+        "required": true
+      },
+      "calcTotal": {
+        "required": true
+      },
+      "pRef": {
+        "required": true
+      },
+      "calcCoeff": {
+        "required": true
+      },
+      "pInf": {
+        "required": true
+      },
+      "UInf": {
+        "required": true
+      }
+    }
+  },
+  "fieldCoordinateSystemTransform": {
+    "brief": "",
+    "keywords": {
+      "fields": {
+        "required": true
+      }
+    }
+  },
+  "surfaceInterpolate": {
+    "brief": "",
+    "keywords": {}
+  },
+  "layerAverage": {
+    "brief": "",
+    "keywords": {
+      "weightFields": {
+        "required": true
+      },
+      "weightField": {
+        "required": true
+      },
+      "setFormat": {
+        "required": true
+      }
+    }
+  },
+  "lambda2": {
+    "brief": "",
+    "keywords": {}
+  },
+  "components": {
+    "brief": "",
+    "keywords": {}
+  },
+  "vorticity": {
+    "brief": "",
+    "keywords": {}
+  },
+  "yPlus": {
+    "brief": "",
+    "keywords": {}
+  },
+  "writeCellCentres": {
+    "brief": "",
+    "keywords": {}
+  },
+  "wallHeatFlux": {
+    "brief": "",
+    "keywords": {}
+  },
+  "add": {
+    "brief": "",
+    "keywords": {}
+  },
+  "turbulenceFields": {
+    "brief": "",
+    "keywords": {
+      "field": {
+        "required": true
+      },
+      "fields": {
+        "required": true
+      }
+    }
+  },
+  "interfaceHeight": {
+    "brief": "",
+    "keywords": {
+      "alpha": {
+        "required": true
+      },
+      "liquid": {
+        "required": true
+      },
+      "locations": {
+        "required": true
+      },
+      "interpolationScheme": {
+        "required": true
+      }
+    }
+  },
+  "age": {
+    "brief": "",
+    "keywords": {}
+  },
+  "volField": {
+    "brief": "",
+    "keywords": {}
+  },
+  "cutLayerAverage": {
+    "brief": "",
+    "keywords": {
+      "direction": {
+        "required": true
+      },
+      "distance": {
+        "required": true
+      },
+      "setFormat": {
+        "required": true
+      },
+      "nOptimiseIter": {
+        "required": true
+      }
+    }
+  },
+  "randomise": {
+    "brief": "",
+    "keywords": {
+      "magPerturbation": {
+        "required": true
+      }
+    }
+  },
+  "pecletNo": {
+    "brief": "",
+    "keywords": {}
+  },
+  "fieldAverage": {
+    "brief": "",
+    "keywords": {
+      "restartOnRestart": {
+        "required": true
+      },
+      "restartOnOutput": {
+        "required": true
+      },
+      "periodicRestart": {
+        "required": true
+      },
+      "restartPeriod": {
+        "required": true
+      },
+      "fields": {
+        "required": true
+      }
+    }
+  },
+  "totalEnthalpy": {
+    "brief": "",
+    "keywords": {}
+  },
+  "wallHeatTransferCoeff": {
+    "brief": "",
+    "keywords": {}
+  },
+  "log": {
+    "brief": "",
+    "keywords": {
+      "clip": {
+        "required": true
+      }
+    }
+  },
+  "wallShearStress": {
+    "brief": "",
+    "keywords": {}
+  },
+  "shearStress": {
+    "brief": "",
+    "keywords": {}
+  },
+  "ddt": {
+    "brief": "",
+    "keywords": {}
+  },
+  "machNo": {
+    "brief": "",
+    "keywords": {}
+  },
+  "processorField": {
+    "brief": "",
+    "keywords": {}
+  },
+  "q": {
+    "brief": "",
+    "keywords": {}
+  },
+  "cylindrical": {
+    "brief": "",
+    "keywords": {
+      "origin": {
+        "required": true
+      },
+      "axis": {
+        "required": true
+      }
+    }
+  },
+  "magSqr": {
+    "brief": "",
+    "keywords": {}
+  },
+  "tr": {
+    "brief": "",
+    "keywords": {}
+  },
+  "histogram": {
+    "brief": "",
+    "keywords": {
+      "field": {
+        "required": true
+      },
+      "max": {
+        "required": true
+      },
+      "nBins": {
+        "required": true
+      },
+      "setFormat": {
+        "required": true
+      }
+    }
+  },
+  "kappaEff": {
+    "brief": "",
+    "keywords": {
+      "Lchar": {
+        "required": true
+      }
+    }
+  },
+  "reynoldsAnalogy": {
+    "brief": "",
+    "keywords": {}
+  },
+  "volFieldValue": {
+    "brief": "",
+    "keywords": {
+      "operation": {
+        "required": true
+      },
+      "writeNumberOfCells": {
+        "required": true
+      },
+      "writeVolume": {
+        "required": true
+      },
+      "writeLocation": {
+        "required": true
+      },
+      "weightFields": {
+        "required": true
+      },
+      "weightField": {
+        "required": true
+      },
+      "scaleFactor": {
+        "required": true
+      }
+    }
+  },
+  "surfaceFieldValue": {
+    "brief": "",
+    "keywords": {
+      "operation": {
+        "required": true
+      },
+      "writeNumberOfFaces": {
+        "required": true
+      },
+      "writeArea": {
+        "required": true
+      },
+      "weightFields": {
+        "required": true
+      },
+      "weightField": {
+        "required": true
+      },
+      "surfaceFormat": {
+        "required": true
+      }
+    }
+  },
+  "fieldValueDelta": {
+    "brief": "",
+    "keywords": {
+      "operation": {
+        "required": true
+      }
+    }
+  },
+  "scalarTransport": {
+    "brief": "",
+    "keywords": {
+      "diffusivity": {
+        "required": true
+      },
+      "D": {
+        "required": true
+      },
+      "alphal": {
+        "required": true
+      },
+      "alphat": {
+        "required": true
+      }
+    }
+  },
+  "phaseScalarTransport": {
+    "brief": "",
+    "keywords": {
+      "field": {
+        "required": true
+      },
+      "diffusivity": {
+        "required": true
+      },
+      "D": {
+        "required": true
+      }
+    }
+  }
+}
