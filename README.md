@@ -2,7 +2,7 @@
 
 <img src="logo.png" alt="OpenFOAM Language Support" width="100">
 
-Syntax highlighting, hover documentation, auto-completion, and an interactive inspector panel for OpenFOAM case files.
+VS Code support for OpenFOAM case files: syntax highlighting, hover docs, completions, an inspector, and quick geometry preview.
 
 ---
 
@@ -10,7 +10,7 @@ Syntax highlighting, hover documentation, auto-completion, and an interactive in
 
 ### Syntax Highlighting
 
-Token-aware coloring for the full OpenFOAM dictionary format:
+Understands the main OpenFOAM dictionary patterns and highlights them clearly:
 
 - `FoamFile` header fields
 - Keywords: `ddtSchemes`, `SIMPLE`, `PIMPLE`, `solvers`, `relaxationFactors`, …
@@ -24,7 +24,7 @@ Token-aware coloring for the full OpenFOAM dictionary format:
 
 ### Hover Documentation
 
-Hover over any keyword to get a description, valid values, and usage examples. Covered topics include:
+Hover a keyword to see what it does, common values, and a short usage hint. Coverage includes:
 
 | Category | Examples |
 |----------|---------|
@@ -50,7 +50,7 @@ Hover over any keyword to get a description, valid values, and usage examples. C
 
 ### Auto-Completion
 
-Context-aware completions with snippet templates:
+Completion suggestions are based on where you are in the file:
 
 - Inside `ddtSchemes { }` → offers `Euler`, `backward`, `CrankNicolson`, …
 - Inside `gradSchemes { }` → offers `Gauss linear`, `leastSquares`, `cellLimited`, …
@@ -63,20 +63,34 @@ Context-aware completions with snippet templates:
 
 ### Outline View
 
-Hierarchical document structure in the Explorer sidebar (`Ctrl+Shift+O`). Colored icons indicate block type (scheme, solver, boundary, mesh, …).
+Shows the document structure in the Explorer and outline view so it is easier to move through large dictionaries.
 
 ### Inspector Panel
 
-A visual horizontal tree of any open OpenFOAM dictionary — blocks as collapsible pills, parameters as cards with inline editable values and boolean toggles.
+A visual view of the current dictionary with blocks, parameters, inline edits, and boolean toggles.
 
 Open with: `Ctrl+Shift+P` → **OpenFOAM: Open Inspector**  
 Or click the `$(file-code) OpenFOAM` status bar item.
 
-The panel follows the editor cursor: the node for the block you are currently editing is highlighted automatically.
+The inspector tracks the active editor and highlights the block around your cursor.
+
+### Geometry Preview
+
+If a geometry reference points to an STL, OBJ, or VTK file, the inspector can show a 3D preview.
+
+- Opens in the inspector panel, which is intended to stay as a horizontal panel at the bottom
+- Inline thumbnails for geometry references
+- Full viewer with rotate, pan, and zoom
+
+Viewer controls:
+
+- Left drag: rotate
+- Right drag or `Shift` + drag: pan
+- Mouse wheel: zoom
 
 ### Auto-Detection
 
-Files in `system/`, `constant/`, and time directories (`0/`, `1/`, etc.) without an extension are automatically set to the `openfoam` language mode.
+Files in `system/`, `constant/`, and time directories such as `0/` or `1/` are detected automatically even when they have no extension.
 
 ---
 
@@ -85,6 +99,7 @@ Files in `system/`, `constant/`, and time directories (`0/`, `1/`, etc.) without
 | Command | Description |
 |---------|-------------|
 | `OpenFOAM: Open Inspector` | Open the visual inspector panel |
+| `OpenFOAM: Preview Geometry (3D)` | Open a geometry file in the inspector viewer |
 | `OpenFOAM: Set Language Mode` | Manually apply OpenFOAM language to the active file |
 | `OpenFOAM: Rebuild Keyword Database` | Re-run extraction scripts against an OpenFOAM source tree |
 | `OpenFOAM: Show Scheme Documentation` | Browse scheme docs via quick-pick |
@@ -112,14 +127,13 @@ Files in `system/`, `constant/`, and time directories (`0/`, `1/`, etc.) without
 ## Installation
 
 ```bash
-# From a .vsix release
-code --install-extension openfoam-language-support-0.4.4.vsix
-
-# From source
+# Install dependencies and build from source
 git clone https://github.com/arefhm94/openfoam-vscode-extension.git
 cd openfoam-vscode-extension
 npm install
 npm run compile
+
+# Package and install the extension locally
 vsce package
 code --install-extension openfoam-language-support-*.vsix
 ```
@@ -153,6 +167,13 @@ data/keyword-db.json                 # Keyword database
 scripts/                             # Python extraction scripts (01–13)
 examples/                            # Example OpenFOAM cases
 ```
+
+---
+
+## Notes
+
+- The inspector is built as a webview panel, so final placement still depends on the current VS Code layout.
+- Geometry preview currently focuses on STL-based workflows and common case-relative geometry paths.
 
 ---
 
