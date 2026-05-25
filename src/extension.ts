@@ -6,8 +6,12 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
-import { WorkflowPanel } from "./workflow/WorkflowPanel";
+import { InspectorPanel } from "./workflow/InspectorPanel";
 import { OpenFOAMDocumentSymbolProvider } from "./providers/OpenFOAMDocumentSymbolProvider";
+import {
+  OpenFOAMInlayHintsProvider,
+  executeToggleBoolean,
+} from "./providers/OpenFOAMCodeLensProvider";
 
 let client: LanguageClient;
 
@@ -47,10 +51,19 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  const workflowCommand = vscode.commands.registerCommand(
-    "openfoam.openWorkflow",
+  const inspectorCommand = vscode.commands.registerCommand(
+    "openfoam.openInspector",
     () => {
-      WorkflowPanel.createOrShow(context.extensionUri);
+      InspectorPanel.createOrShow(context.extensionUri, context);
+    },
+  );
+
+  // When the active editor switches to an OpenFOAM file, push it to the inspector
+  const activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor(
+    (editor: vscode.TextEditor | undefined) => {
+      if (editor && InspectorPanel.currentPanel) {
+        InspectorPanel.currentPanel.loadDocument(editor.document);
+      }
     },
   );
 
@@ -61,9 +74,22 @@ export function activate(context: vscode.ExtensionContext) {
       new OpenFOAMDocumentSymbolProvider(),
     );
 
+  // Register CodeLens provider for boolean toggles in the text editor
+  const inlayHintsProvider = vscode.languages.registerInlayHintsProvider(
+    { language: "openfoam" },
+    new OpenFOAMInlayHintsProvider(),
+  );
+
+  const toggleBooleanCommand = vscode.commands.registerCommand(
+    "openfoam.toggleBoolean",
+    async (uri: vscode.Uri, lineNumber: number) => {
+      await executeToggleBoolean(uri, lineNumber);
+    },
+  );
+
   // Auto-detect OpenFOAM files based on directory structure
   const autoDetectDisposable = vscode.workspace.onDidOpenTextDocument(
-    async (document) => {
+    async (document: vscode.TextDocument) => {
       // Skip if already set to openfoam or if it's not a file
       if (
         document.languageId === "openfoam" ||
@@ -101,7 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // Also check currently open documents on activation
-  vscode.workspace.textDocuments.forEach(async (document) => {
+  vscode.workspace.textDocuments.forEach(async (document: vscode.TextDocument) => {
     if (document.languageId === "openfoam" || document.uri.scheme !== "file") {
       return;
     }
@@ -133,8 +159,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     refreshCommand,
     setLanguageCommand,
-    workflowCommand,
+    inspectorCommand,
+    activeEditorWatcher,
     documentSymbolProvider,
+    inlayHintsProvider,
+    toggleBooleanCommand,
     autoDetectDisposable,
   );
 
@@ -266,7 +295,7 @@ async function refreshKeywordDatabase(
       "Keyword extraction started. Check the terminal for progress. Restart VS Code after completion to load the new database.",
       "Reload Window",
     )
-    .then((selection) => {
+    .then((selection: string | undefined) => {
       if (selection === "Reload Window") {
         vscode.commands.executeCommand("workbench.action.reloadWindow");
       }

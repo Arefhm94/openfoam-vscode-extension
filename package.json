@@ -99,11 +99,23 @@
         "title": "OpenFOAM: Set Language Mode"
       },
       {
-        "command": "openfoam.openWorkflow",
-        "title": "OpenFOAM: Open Case Workflow",
-        "icon": "$(graph)"
+        "command": "openfoam.openInspector",
+        "title": "OpenFOAM: Open Inspector",
+        "icon": {
+          "light": "./media/inspector-icon.svg",
+          "dark": "./media/inspector-icon.svg"
+        }
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "openfoam.openInspector",
+          "when": "resourceLangId == openfoam",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "OpenFOAM",
       "properties": {

@@ -78,10 +78,10 @@ export class SolverScraper {
     return new Promise((resolve, reject) => {
       const protocol = url.startsWith('https') ? https : http;
 
-      protocol.get(url, (res) => {
+      protocol.get(url, (res: http.IncomingMessage) => {
         let data = '';
 
-        res.on('data', (chunk) => {
+        res.on('data', (chunk: Buffer | string) => {
           data += chunk;
         });
 
@@ -93,7 +93,7 @@ export class SolverScraper {
           }
         });
 
-      }).on('error', (err) => {
+      }).on('error', (err: Error) => {
         reject(err);
       });
     });
