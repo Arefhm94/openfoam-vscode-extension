@@ -2,7 +2,7 @@
   "name": "openfoam-language-support",
   "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "arefhm94",
   "repository": {
     "type": "git",
@@ -108,8 +108,8 @@
         "command": "openfoam.openInspector",
         "title": "OpenFOAM: Open Inspector",
         "icon": {
-          "light": "./media/inspector-icon.svg",
-          "dark": "./media/inspector-icon.svg"
+          "light": "./media/inspector-icon-light.svg",
+          "dark": "./media/inspector-icon-dark.svg"
         }
       },
       {
