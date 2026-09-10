@@ -1,0 +1,25 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    object      blockCommentWithBraces;
+}
+
+/*
+    This block comment intentionally contains brace and paren characters
+    that must NOT affect nesting depth or tokenization:
+    { unbalanced { nested } "quoted { brace }" ( list ( 0 0 0 ) )
+    // this line looks like a line comment but is still inside the block comment
+*/
+
+realEntry
+{
+    // a line comment with a brace: { should not open a block }
+    key         value;   // trailing comment with a brace: }
+}
+
+// ************************************************************************* //

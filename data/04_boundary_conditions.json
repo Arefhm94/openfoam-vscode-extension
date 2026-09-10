@@ -80,7 +80,8 @@
     "appliesTo": ["scalar"],
     "keywords": {
       "type": { "required": true, "type": "word" },
-      "value": { "required": false, "type": "field" }
+      "value": { "required": false, "type": "field" },
+      "gradient": { "required": false, "type": "field", "description": "Explicit gradient override" }
     }
   },
   "prghTotalPressure": {
@@ -89,7 +90,9 @@
     "keywords": {
       "type": { "required": true, "type": "word" },
       "p0": { "required": true, "type": "scalar" },
-      "value": { "required": true, "type": "field" }
+      "value": { "required": true, "type": "field" },
+      "psi": { "required": false, "type": "word", "description": "Compressibility field name, or 'none'" },
+      "gamma": { "required": false, "type": "scalar", "description": "Ratio of specific heats (cp/cv)" }
     }
   },
   "kqRWallFunction": {

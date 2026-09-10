@@ -105,14 +105,6 @@
         "title": "OpenFOAM: Set Language Mode"
       },
       {
-        "command": "openfoam.openInspector",
-        "title": "OpenFOAM: Open Inspector",
-        "icon": {
-          "light": "./media/inspector-icon-light.svg",
-          "dark": "./media/inspector-icon-dark.svg"
-        }
-      },
-      {
         "command": "openfoam.rebuildKeywordDb",
         "title": "OpenFOAM: Rebuild Keyword Database",
         "icon": "$(database)"
@@ -136,6 +128,31 @@
         "command": "openfoam.previewGeometry",
         "title": "OpenFOAM: Preview Geometry (3D)",
         "icon": "$(eye)"
+      },
+      {
+        "command": "openfoam.copyRelativePath",
+        "title": "OpenFOAM: Copy Relative Path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "openfoam.revealInFinder",
+        "title": "OpenFOAM: Reveal in Finder",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "openfoam.duplicateFile",
+        "title": "OpenFOAM: Duplicate File",
+        "icon": "$(files)"
+      },
+      {
+        "command": "openfoam.findFileInCase",
+        "title": "OpenFOAM: Find File in Case",
+        "icon": "$(search)"
+      },
+      {
+        "command": "openfoam.switchCaseRoot",
+        "title": "OpenFOAM: Switch Case Root",
+        "icon": "$(root-folder)"
       }
     ],
     "viewsContainers": {
@@ -156,18 +173,28 @@
       ]
     },
     "menus": {
-      "editor/title": [
-        {
-          "command": "openfoam.openInspector",
-          "when": "resourceLangId == openfoam",
-          "group": "navigation"
-        }
-      ],
       "view/title": [
         {
           "command": "openfoam.refreshCaseTree",
           "when": "view == openfoam.caseExplorer",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "openfoam.copyRelativePath",
+          "when": "view == openfoam.caseExplorer && viewItem != folder",
+          "group": "inline@1"
+        },
+        {
+          "command": "openfoam.revealInFinder",
+          "when": "view == openfoam.caseExplorer",
+          "group": "inline@2"
+        },
+        {
+          "command": "openfoam.duplicateFile",
+          "when": "view == openfoam.caseExplorer && viewItem != folder",
+          "group": "inline@3"
         }
       ]
     },
@@ -245,24 +272,29 @@
     "compile": "tsc -b && npx esbuild src/webview/geoViewer.ts --bundle --format=iife --outfile=media/geo-viewer.js",
     "watch": "tsc -b -w",
     "pretest": "npm run compile",
+    "test": "vitest run",
     "extract-keywords": "node out/extractor/extractKeywords.js",
     "scrape-solvers": "node out/extractor/solverScraper.js",
     "update-database": "npm run scrape-solvers && npm run extract-keywords",
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@types/node": "^18.0.0",
+    "@types/node": "^22.0.0",
     "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.0",
     "eslint": "^8.0.0",
     "three": "^0.184.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^5.0.0"
   },
   "dependencies": {
+    "tree-sitter-openfoam": "file:../tree-sitter-openfoam",
     "vscode-languageclient": "^8.1.0",
     "vscode-languageserver": "^8.1.0",
-    "vscode-languageserver-textdocument": "^1.0.8"
+    "vscode-languageserver-textdocument": "^1.0.8",
+    "web-tree-sitter": "^0.27.0"
   }
 }

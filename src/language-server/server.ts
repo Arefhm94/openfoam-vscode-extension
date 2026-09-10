@@ -1,7 +1,7 @@
 import {
   createConnection, TextDocuments, ProposedFeatures, InitializeParams,
   CompletionItem, CompletionItemKind, TextDocumentPositionParams,
-  TextDocumentSyncKind, Hover, MarkupKind, SignatureHelp, SignatureInformation,
+  TextDocumentSyncKind, Hover, MarkupKind, SignatureHelp,
   ParameterInformation, InitializeResult, Diagnostic, DiagnosticSeverity,
   Range, Position, Location, Definition, DocumentLink, DocumentLinkParams,
   CodeAction, CodeActionKind, CodeActionParams, TextEdit, WorkspaceEdit,
@@ -10,12 +10,37 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as path from "path";
-import { findCaseRoot, resolveInclude, resolveVariable, uriToPath } from './caseContext';
+import { findCaseRoot, resolveInclude, resolveVariable, uriToPath, collectVariables } from './caseContext';
 import {
-  scanCaseGeometry, getSurfaceNames, getSurfaceFilenames,
-  getFeatureEdgeMeshNames, getBoundaryPatchNames, getSTLRegionsForSurface,
+  scanCaseGeometry, getSurfaceNames,
+  getBoundaryPatchNames, getSTLRegionsForSurface,
   getSTLStats, getPatchInfoList,
 } from './caseGeometryScanner';
+import type { Parser as TSParser, Tree } from '../treeSitter/parser';
+import { getParser, parseText } from '../treeSitter/parser';
+import {
+  getCursorContext as tsGetCursorContext,
+  wordAt as tsWordAt,
+  dollarReferenceAt as tsDollarReferenceAt,
+  isInsideComment as tsIsInsideComment,
+  signatureHelpContext as tsSignatureHelpContext,
+} from '../treeSitter/queries';
+import {
+  validate as schemaValidate,
+  validateBlock as schemaValidateBlock,
+  validateBoundaryConditions,
+  boundaryConditionsForFieldType,
+  collectParseErrors,
+  SchemaDiagnostic,
+  FieldSpec,
+} from '../treeSitter/schema';
+import {
+  FVSCHEMES_TOP_LEVEL, FVSOLUTION_TOP_LEVEL, TURBULENCE_PROPERTIES_TOP_LEVEL, SNAPPY_TOP_LEVEL,
+  REGION_PROPERTIES, PHASE_PROPERTIES_TOP_LEVEL, MAP_FIELDS_DICT,
+  HELYX_SNAPPY_TOP_LEVEL, HELYX_CASTELLATED_EXTRA_KEYS, HELYX_SNAP_EXTRA_KEYS,
+  HELYX_ADD_LAYERS_EXTRA_KEYS, HELYX_MESH_QUALITY_EXTRA_KEYS, withExtraKeys,
+  helyxCastellatedSchema,
+} from '../treeSitter/knownSchemas';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +48,7 @@ type OpenFOAMFileType =
   | "fvSchemes" | "fvSolution" | "controlDict" | "blockMeshDict"
   | "snappyHexMeshDict" | "helyxHexMeshDict" | "decomposeParDict" | "turbulenceProperties"
   | "transportProperties" | "thermophysicalProperties" | "boundaryField"
+  | "regionProperties" | "phaseProperties" | "mapFieldsDict"
   | "unknown";
 
 interface CursorContext {
@@ -39,9 +65,13 @@ interface KeywordDb {
   algorithms:       Record<string, AlgoInfo>;
   boundaryConditions: Record<string, BcInfo>;
   turbulenceModels: { RAS: Record<string, TurbModel>; LES: Record<string, TurbModel> };
-  controlDict:      Record<string, FieldSpec>;
-  snappyHexMesh:    Record<string, FieldSpec>;
-  blockMesh:        Record<string, FieldSpec>;
+  // NB: controlDict/blockMesh/snappyHexMesh are nested one level deeper than
+  // decomposePar in data/keyword-db.json — this previously didn't match
+  // reality (fixed while wiring up Phase 3's schema validator; see
+  // context/progress.md).
+  controlDict:      { keywords: Record<string, FieldSpec> };
+  snappyHexMesh:    { castellatedMeshControls: Record<string, FieldSpec>; snapControls: Record<string, FieldSpec>; addLayersControls: Record<string, FieldSpec>; meshQualityControls: Record<string, FieldSpec> };
+  blockMesh:        { keywords: Record<string, FieldSpec> };
   decomposePar:     Record<string, FieldSpec>;
   contexts:         Record<string, unknown>;
 }
@@ -52,7 +82,9 @@ interface SolverInfo  { brief: string; appliesTo?: string; keywords: Record<stri
 interface AlgoInfo    { keywords: Record<string, FieldSpec> }
 interface BcInfo      { brief: string; appliesTo: string[]; keywords: Record<string, FieldSpec> }
 interface TurbModel   { brief: string; requiredFields?: string[]; coefficients: Record<string, { type: string; default?: unknown }> }
-interface FieldSpec   { type?: string; options?: string[]; required?: boolean; default?: unknown; description?: string; keywords?: Record<string, FieldSpec> }
+// FieldSpec is defined in treeSitter/schema.ts (imported below) rather
+// than duplicated here — it's the same shape the schema validator and
+// this file's hover/completion logic both need.
 
 // ── Scheme category by file/block context ────────────────────────────────────
 const BLOCK_TO_SCHEME: Record<string, string> = {
@@ -64,6 +96,15 @@ const BLOCK_TO_SCHEME: Record<string, string> = {
   ddtSchemes:           "ddtScheme",
   d2dt2Schemes:         "d2dt2Scheme",
 };
+
+const COMMON_SOLVERS: string[] = [
+  "simpleFoam", "pimpleFoam", "pisoFoam", "rhoPimpleFoam", "rhoSimpleFoam",
+  "interFoam", "interIsoFoam", "icoFoam", "buoyantSimpleFoam", "buoyantPimpleFoam",
+  "sprayFoam", "fireFoam", "chtMultiRegionFoam", "chtMultiRegionSimpleFoam",
+  "potentialFoam", "laplacianFoam", "scalarTransportFoam", "twoPhaseEulerFoam",
+  "multiphaseEulerFoam", "blockMesh", "snappyHexMesh", "checkMesh",
+  "decomposePar", "reconstructPar"
+];
 
 // ── Static hover descriptions for well-known block/keyword names ──────────────
 const BLOCK_DESCRIPTIONS: Record<string, string> = {
@@ -725,6 +766,8 @@ class OpenFOAMLanguageServer {
   private docs  = new TextDocuments(TextDocument);
   private db!:  KeywordDb;
   private debounce = new Map<string, ReturnType<typeof setTimeout>>();
+  private tsParser: TSParser | undefined;
+  private trees = new Map<string, Tree>();
 
   constructor() {
     this.conn.onInitialize(this.onInit.bind(this));
@@ -738,9 +781,32 @@ class OpenFOAMLanguageServer {
     this.conn.onCodeAction(this.onCodeAction.bind(this));
     this.conn.onDocumentFormatting(this.onDocumentFormatting.bind(this));
     this.conn.onRenameRequest(this.onRename.bind(this));
-    this.docs.onDidChangeContent(e => this.scheduleDiagnostics(e.document));
-    this.docs.onDidOpen(e => this.scheduleDiagnostics(e.document));
+    this.docs.onDidChangeContent(e => { this.parseDoc(e.document); this.scheduleDiagnostics(e.document); });
+    this.docs.onDidOpen(e => { this.parseDoc(e.document); this.scheduleDiagnostics(e.document); });
+    this.docs.onDidClose(e => this.trees.delete(e.document.uri));
     this.docs.listen(this.conn);
+  }
+
+  // ── Tree-sitter ───────────────────────────────────────────────────────────
+  /**
+   * Parses (or re-parses, fresh) `doc` and caches the resulting tree by
+   * URI. A true incremental reparse via `tree.edit()` would need the raw
+   * LSP `contentChanges` ranges, which aren't exposed through the
+   * `TextDocuments` wrapper's `onDidChangeContent` event without
+   * re-registering `connection.onDidChangeTextDocument` ourselves (which
+   * would replace, not augment, the wrapper's own handler and break its
+   * document-sync bookkeeping) — see the incremental-vs-full benchmark
+   * script instead for the latency comparison the doc asks for.
+   */
+  private parseDoc(doc: TextDocument): Tree | undefined {
+    if (!this.tsParser) return undefined;
+    const tree = parseText(this.tsParser, doc.getText());
+    this.trees.set(doc.uri, tree);
+    return tree;
+  }
+
+  private getTree(doc: TextDocument): Tree | undefined {
+    return this.trees.get(doc.uri) ?? this.parseDoc(doc);
   }
 
   listen() { this.docs.listen(this.conn); this.conn.listen(); }
@@ -751,7 +817,7 @@ class OpenFOAMLanguageServer {
       capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         hoverProvider: true,
-        completionProvider: { resolveProvider: false, triggerCharacters: [" ", "\n", "{"] },
+        completionProvider: { resolveProvider: false, triggerCharacters: ["$", "#", "\"", "<", "/", "."] },
         signatureHelpProvider: { triggerCharacters: [" "] },
         definitionProvider: true,
         documentLinkProvider: { resolveProvider: false },
@@ -762,7 +828,13 @@ class OpenFOAMLanguageServer {
     };
   }
 
-  private onInited() { this.loadDb(); }
+  private onInited() {
+    this.loadDb();
+    getParser().then(parser => {
+      this.tsParser = parser;
+      for (const doc of this.docs.all()) this.parseDoc(doc);
+    }).catch(err => this.conn.console.error(`OpenFOAM LSP: failed to load tree-sitter grammar: ${err}`));
+  }
 
   private loadDb() {
     const candidates = [
@@ -783,7 +855,8 @@ class OpenFOAMLanguageServer {
     this.conn.console.error("OpenFOAM LSP: keyword-db.json not found");
     this.db = { version:"?", schemes:{}, linearSolvers:{}, algorithms:{},
       boundaryConditions:{}, turbulenceModels:{RAS:{},LES:{}},
-      controlDict:{}, snappyHexMesh:{}, blockMesh:{}, decomposePar:{}, contexts:{} };
+      controlDict:{keywords:{}}, snappyHexMesh:{castellatedMeshControls:{},snapControls:{},addLayersControls:{},meshQualityControls:{}},
+      blockMesh:{keywords:{}}, decomposePar:{}, contexts:{} };
   }
 
   // ── Context detection ─────────────────────────────────────────────────────
@@ -811,45 +884,40 @@ class OpenFOAMLanguageServer {
     return "unknown";
   }
 
-  private getBlockPath(text: string, offset: number): string[] {
-    const path_: string[] = [];
-    let depth = 0;
-    let i = 0;
-    let lastWord = "";
-    while (i < offset) {
-      const ch = text[i];
-      if (ch === '/' && text[i+1] === '/') { while (i < offset && text[i] !== '\n') i++; continue; }
-      if (ch === '/' && text[i+1] === '*') { i += 2; while (i < offset-1 && !(text[i]==='*' && text[i+1]==='/')) i++; i += 2; continue; }
-      if (/\w/.test(ch)) {
-        let w = ''; while (i < offset && /[\w.()]/.test(text[i])) w += text[i++];
-        lastWord = w; continue;
-      }
-      if (ch === '{') { if (lastWord) path_[depth] = lastWord; depth++; lastWord = ''; }
-      if (ch === '}') { depth = Math.max(0, depth-1); path_.splice(depth); lastWord = ''; }
-      if (ch === ';') lastWord = '';
-      i++;
+  private static readonly SCALAR_FIELD_NAMES = new Set([
+    'p', 'p_rgh', 'k', 'epsilon', 'omega', 'nut', 'nuTilda', 'T', 'rho', 'mu', 'nu',
+  ]);
+
+  /** The field's value type (scalar/vector/tensor/symmTensor), used to
+   * filter boundary-condition completions by `BcInfo.appliesTo`. Derived
+   * from the FoamFile `class` field (authoritative) when present, else a
+   * filename convention fallback. */
+  private detectFieldValueType(doc: TextDocument): string | undefined {
+    const clsM = doc.getText().match(/\bclass\s+(\w+)\s*;/);
+    if (clsM) {
+      const cls = clsM[1];
+      if (/SymmTensor/.test(cls)) return 'symmTensor';
+      if (/Tensor/.test(cls)) return 'tensor';
+      if (/Vector/.test(cls)) return 'vector';
+      if (/Scalar/.test(cls)) return 'scalar';
     }
-    return path_.filter(Boolean);
+    const fname = path.basename(doc.uri);
+    if (fname === 'U') return 'vector';
+    if (OpenFOAMLanguageServer.SCALAR_FIELD_NAMES.has(fname) || fname.startsWith('alpha')) return 'scalar';
+    return undefined;
   }
 
   private getCursorContext(doc: TextDocument, pos: Position): CursorContext {
-    const text   = doc.getText();
-    const offset = doc.offsetAt(pos);
-    const blockPath = this.getBlockPath(text, offset);
-
-    // Determine key vs value: look back from cursor to previous ; or {
-    const before = text.slice(Math.max(0, offset - 200), offset);
-    const lastBreak = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'));
-    const segment = before.slice(lastBreak + 1).trim();
-    const cursorIn: "key" | "value" = segment.split(/\s+/).length > 1 ? "value" : "key";
-    const currentKey = segment.split(/\s+/)[0] || '';
-
-    return {
-      fileType:  this.detectFileType(doc),
-      blockPath,
-      cursorIn,
-      currentKey,
-    };
+    const tree = this.getTree(doc);
+    const fileType = this.detectFileType(doc);
+    if (!tree) {
+      // Tree-sitter hasn't finished loading yet (should be brief, right
+      // after server startup) — fall back to an empty context rather
+      // than throwing.
+      return { fileType, blockPath: [], cursorIn: "key", currentKey: "" };
+    }
+    const { blockPath, cursorIn, currentKey } = tsGetCursorContext(tree, pos);
+    return { fileType, blockPath, cursorIn, currentKey };
   }
 
   // ── Hover ─────────────────────────────────────────────────────────────────
@@ -878,24 +946,21 @@ class OpenFOAMLanguageServer {
       return { contents: { kind: MarkupKind.Markdown, value: `**#include** \`${inclM[1]}\` *(file not found)*` } };
     }
 
-    const word = this.wordAt(doc, params.position);
-    if (!word) return null;
-
     // $variable → show value + origin
-    const text = doc.getText();
-    const offset = doc.offsetAt(params.position);
-    let wordStart = offset;
-    while (wordStart > 0 && /\w/.test(text[wordStart - 1])) wordStart--;
-    if (wordStart > 0 && text[wordStart - 1] === '$') {
+    const dollarVar = this.dollarReferenceAt(doc, params.position);
+    if (dollarVar !== null) {
       const caseRoot = findCaseRoot(doc.uri);
-      const varDef = resolveVariable(word, doc.uri, caseRoot);
+      const varDef = resolveVariable(dollarVar, doc.uri, caseRoot);
       if (varDef) {
         const src = path.basename(uriToPath(varDef.uri));
         return { contents: { kind: MarkupKind.Markdown,
-          value: `**$${word}** = \`${varDef.value}\`\n\n*(defined in ${src}, line ${varDef.line + 1})*` } };
+          value: `**$${dollarVar}** = \`${varDef.value}\`\n\n*(defined in ${src}, line ${varDef.line + 1})*` } };
       }
-      return { contents: { kind: MarkupKind.Markdown, value: `**$${word}** *(variable not found)*` } };
+      return { contents: { kind: MarkupKind.Markdown, value: `**$${dollarVar}** *(variable not found)*` } };
     }
+
+    const word = this.wordAt(doc, params.position);
+    if (!word) return null;
 
     // Surface name hover → STL/geometry statistics
     const caseRootForGeo = findCaseRoot(doc.uri);
@@ -946,7 +1011,7 @@ class OpenFOAMLanguageServer {
     return { contents: { kind: MarkupKind.Markdown, value: md } };
   }
 
-  private lookupHover(word: string, doc: TextDocument): string | null {
+  private lookupHover(word: string, _doc: TextDocument): string | null {
     if (!this.db) return null;
 
     // Check static block / keyword descriptions first
@@ -1017,8 +1082,8 @@ class OpenFOAMLanguageServer {
     }
 
     // controlDict keywords
-    if (word in (this.db.controlDict || {})) {
-      const f = this.db.controlDict[word];
+    if (word in (this.db.controlDict?.keywords || {})) {
+      const f = this.db.controlDict.keywords[word];
       let md = `### ${word}\n*controlDict*\n\n${f.description || ''}`;
       if (f.options?.length) md += `\n\n**Valid values:** ${f.options.map(o => `\`${o}\``).join(', ')}`;
       if (f.default !== undefined) md += `\n\n**Default:** \`${f.default}\``;
@@ -1028,19 +1093,168 @@ class OpenFOAMLanguageServer {
     return null;
   }
 
+  // ── Helper: detect if cursor is in a comment ──────────────────────────────
+  private isInsideComment(doc: TextDocument, pos: Position): boolean {
+    const tree = this.getTree(doc);
+    if (!tree) return false;
+    return tsIsInsideComment(tree, pos);
+  }
+
+  // ── Word similarity scorer ────────────────────────────────────────────────
+  private computeWordSimilarity(candidate: string, typed: string): number {
+    if (!typed || !candidate) return 0;
+
+    if (typed === '#' && candidate.startsWith('#')) return 90;
+    if (typed === '$' && candidate.startsWith('$')) return 90;
+
+    const c = candidate.toLowerCase();
+    const t = typed.toLowerCase();
+
+    // Strip leading and trailing syntax marks for semantic comparison
+    const cClean = c.replace(/^[#$"]/, '').replace(/[";]$/, '');
+    const tClean = t.replace(/^[#$"]/, '').replace(/[";]$/, '');
+
+    if (c === t || cClean === tClean) return 100;
+    if (candidate.startsWith(typed) || (cClean.length > 0 && candidate.startsWith(tClean))) return 95;
+    if (c.startsWith(t) || (cClean.length > 0 && cClean.startsWith(tClean))) return 90;
+
+    // Acronym / CamelCase matching: e.g. "kos" -> "kOmegaSST", "pbs" -> "PBiCGStab", "fv" -> "fixedValue"
+    const acronym = (candidate[0] + candidate.slice(1).replace(/[^A-Z]/g, '')).toLowerCase();
+    if (acronym.length >= 2 && (acronym.startsWith(tClean) || acronym === tClean)) {
+      return 85;
+    }
+    const capitals = candidate.replace(/[^A-Z]/g, '').toLowerCase();
+    if (capitals.length >= 2 && (capitals.startsWith(tClean) || capitals === tClean)) {
+      return 80;
+    }
+
+    // Word boundary match: e.g. "linear" matches "Gauss linear" or "linearUpwind"
+    const wordBoundary = new RegExp('\\b' + escapeRegex(tClean), 'i');
+    if (wordBoundary.test(candidate)) {
+      return 70;
+    }
+
+    // Substring match
+    const idx = cClean.indexOf(tClean);
+    if (idx !== -1 && tClean.length >= 2) {
+      return Math.max(20, 60 - idx * 2);
+    }
+
+    // If typed prefix is very short (1 char), only allow prefix matches
+    if (tClean.length < 2) {
+      return 0;
+    }
+
+    // Subsequence match for 3+ chars
+    if (tClean.length >= 3) {
+      let ti = 0;
+      for (let ci = 0; ci < cClean.length && ti < tClean.length; ci++) {
+        if (cClean[ci] === tClean[ti]) ti++;
+      }
+      if (ti === tClean.length) {
+        return 15;
+      }
+    }
+
+    return 0;
+  }
+
+  // ── Filter and sort completions by similarity ─────────────────────────────
+  private filterAndSortCompletions(items: CompletionItem[], typedPrefix: string): CompletionItem[] {
+    if (!typedPrefix) return [];
+
+    const scored: Array<{ item: CompletionItem; score: number }> = [];
+
+    for (const item of items) {
+      const labelScore = this.computeWordSimilarity(item.label, typedPrefix);
+      const filterScore = item.filterText ? this.computeWordSimilarity(item.filterText, typedPrefix) : 0;
+      const bestScore = Math.max(labelScore, filterScore);
+
+      if (bestScore > 0) {
+        const rank = String(1000 - bestScore).padStart(4, '0');
+        const sortKey = (item.sortText && item.sortText.startsWith('!!'))
+          ? '!' + rank + '_' + item.label
+          : rank + '_' + item.label;
+        scored.push({
+          item: {
+            ...item,
+            sortText: sortKey,
+          },
+          score: bestScore,
+        });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map(s => s.item);
+  }
+
   // ── Completion ────────────────────────────────────────────────────────────
   private onCompletion(params: TextDocumentPositionParams): CompletionItem[] {
     const doc = this.docs.get(params.textDocument.uri);
     if (!doc || !this.db) return [];
 
-    // #include path completions
+    // 1. Guard against comments: never provide completions inside comments
+    if (this.isInsideComment(doc, params.position)) {
+      return [];
+    }
+
     const lineText = doc.getText({
       start: { line: params.position.line, character: 0 },
       end: { line: params.position.line, character: params.position.character },
     });
+
+    // 2. Guard against empty lines or lines with only whitespace:
+    // If user goes to a new line or is at indentation spaces, do not show suggestions
+    if (lineText.trim() === '') {
+      return [];
+    }
+
+    // 3. Handle #include path completions
     const inclPartial = lineText.match(/#include\s+["<]([^">]*)$/);
     if (inclPartial) {
       return this.includePathCompletions(inclPartial[1], doc.uri);
+    }
+
+    // 4. Extract token currently being typed immediately before cursor
+    const tokenMatch = lineText.match(/([#$]?[a-zA-Z0-9_.-]+)$/);
+    if (!tokenMatch) {
+      // Cursor is preceded by whitespace, semicolon, bracket, etc. with no active token
+      return [];
+    }
+    const typedPrefix = tokenMatch[1];
+
+    // 5. Preprocessor directives (#...)
+    if (typedPrefix.startsWith('#')) {
+      const preprocItems: CompletionItem[] = [
+        { label: '#include', kind: CompletionItemKind.Keyword, insertText: '#include "${1:file}"', insertTextFormat: 2 },
+        { label: '#includeEtc', kind: CompletionItemKind.Keyword, insertText: '#includeEtc "${1:file}"', insertTextFormat: 2 },
+        { label: '#includeFunc', kind: CompletionItemKind.Keyword, insertText: '#includeFunc ${1:func}', insertTextFormat: 2 },
+        { label: '#calc', kind: CompletionItemKind.Keyword, insertText: '#calc "${1:expression}"', insertTextFormat: 2 },
+        { label: '#inputMode', kind: CompletionItemKind.Keyword, insertText: '#inputMode ${1|merge,overwrite,protect,warn,error|}', insertTextFormat: 2 },
+        { label: '#message', kind: CompletionItemKind.Keyword, insertText: '#message "${1:message}"', insertTextFormat: 2 },
+        { label: '#error', kind: CompletionItemKind.Keyword, insertText: '#error "${1:error}"', insertTextFormat: 2 },
+        { label: '#if', kind: CompletionItemKind.Keyword, insertText: '#if ${1:condition}', insertTextFormat: 2 },
+        { label: '#else', kind: CompletionItemKind.Keyword, insertText: '#else' },
+        { label: '#endif', kind: CompletionItemKind.Keyword, insertText: '#endif' },
+        { label: '#ifeq', kind: CompletionItemKind.Keyword, insertText: '#ifeq (${1:var1}) (${2:var2})', insertTextFormat: 2 },
+      ];
+      return this.filterAndSortCompletions(preprocItems, typedPrefix);
+    }
+
+    // 6. Variable references ($...)
+    if (typedPrefix.startsWith('$')) {
+      const varItems: CompletionItem[] = [];
+      const vars = collectVariables(doc.getText(), doc.uri);
+      for (const v of vars) {
+        varItems.push({
+          label: '$' + v.name,
+          kind: CompletionItemKind.Variable,
+          detail: `value: ${v.value}`,
+          insertText: '$' + v.name,
+        });
+      }
+      return this.filterAndSortCompletions(varItems, typedPrefix);
     }
 
     const ctx = this.getCursorContext(doc, params.position);
@@ -1060,11 +1274,18 @@ class OpenFOAMLanguageServer {
     };
 
     const addKeywords = (spec: Record<string, FieldSpec>, kind = CompletionItemKind.Property) => {
-      for (const [kw, info] of Object.entries(spec)) {
+      // Required keys first: filterAndSortCompletions() ranks by fuzzy
+      // match score against the typed prefix and (per Array.sort's
+      // stability) preserves relative order among equal-score items, so
+      // pushing required entries before optional ones here surfaces them
+      // first whenever they're equally relevant matches.
+      const entries = Object.entries(spec)
+        .sort((a, b) => Number(!!b[1].required) - Number(!!a[1].required));
+      for (const [kw, info] of entries) {
         items.push({
           label: kw,
           kind,
-          detail: info.description || (info.options ? info.options.join(' | ') : ''),
+          detail: (info.required ? '(required) ' : '') + (info.description || (info.options ? info.options.join(' | ') : '')),
           insertText: this.fieldSnippet(kw, info),
           insertTextFormat: 2,
         });
@@ -1074,87 +1295,307 @@ class OpenFOAMLanguageServer {
     const top = ctx.blockPath[0] || '';
     const sub = ctx.blockPath[1] || '';
 
+    // Handle FoamFile header in any file
+    if (top === 'FoamFile') {
+      if (ctx.cursorIn === 'key') {
+        for (const k of ['version', 'format', 'class', 'location', 'object']) {
+          items.push({ label: k, kind: CompletionItemKind.Property, insertText: `${k}         $1;`, insertTextFormat: 2 });
+        }
+      } else {
+        if (ctx.currentKey === 'version') items.push({ label: '2.0', kind: CompletionItemKind.Value });
+        if (ctx.currentKey === 'format') for (const f of ['ascii', 'binary']) items.push({ label: f, kind: CompletionItemKind.Value });
+        if (ctx.currentKey === 'class') for (const c of ['dictionary', 'volScalarField', 'volVectorField']) items.push({ label: c, kind: CompletionItemKind.Value });
+      }
+      return this.filterAndSortCompletions(items, typedPrefix);
+    }
+
     if (ctx.fileType === 'fvSchemes') {
       if (!top || top === 'fvSchemes') {
-        // Offer sub-dict names
-        for (const k of Object.keys(BLOCK_TO_SCHEME)) items.push({ label: k, kind: CompletionItemKind.Module, insertText: `${k}\n{\n    default         $1;\n}\n`, insertTextFormat: 2 });
+        if (ctx.cursorIn === 'key') {
+          for (const k of Object.keys(BLOCK_TO_SCHEME)) {
+            items.push({ label: k, kind: CompletionItemKind.Module, insertText: `${k}\n{\n    default         $1;\n}\n`, insertTextFormat: 2 });
+          }
+          items.push({ label: 'fluxScheme', kind: CompletionItemKind.Module, insertText: `fluxScheme\n{\n    default         $1;\n}\n`, insertTextFormat: 2 });
+        }
       } else {
         const cat = BLOCK_TO_SCHEME[top];
         if (cat) {
-          addSchemes(cat);
-          items.push({ label: 'default', kind: CompletionItemKind.Keyword, insertText: 'default         $1;', insertTextFormat: 2 });
+          if (ctx.cursorIn === 'key') {
+            items.push({ label: 'default', kind: CompletionItemKind.Keyword, insertText: 'default         $1;', insertTextFormat: 2 });
+            if (top === 'divSchemes') {
+              for (const t of ['div(phi,U)', 'div(phi,k)', 'div(phi,omega)', 'div(phi,epsilon)', 'div(phi,nuTilda)', 'div((nuEff*dev2(T(grad(U)))))', 'div(interpolate(U),p)']) {
+                items.push({ label: t, kind: CompletionItemKind.Property, insertText: `${t}  $1;`, insertTextFormat: 2 });
+              }
+            } else if (top === 'gradSchemes') {
+              for (const t of ['grad(U)', 'grad(p)', 'grad(k)', 'grad(omega)', 'grad(epsilon)']) {
+                items.push({ label: t, kind: CompletionItemKind.Property, insertText: `${t}  $1;`, insertTextFormat: 2 });
+              }
+            } else if (top === 'laplacianSchemes') {
+              for (const t of ['laplacian(nu,U)', 'laplacian(1|A(U),p)', 'laplacian(nuEff,U)', 'laplacian((1|A(U)),p_rgh)']) {
+                items.push({ label: t, kind: CompletionItemKind.Property, insertText: `${t}  $1;`, insertTextFormat: 2 });
+              }
+            } else if (top === 'ddtSchemes') {
+              for (const t of ['ddt(U)', 'ddt(rho,U)']) {
+                items.push({ label: t, kind: CompletionItemKind.Property, insertText: `${t}  $1;`, insertTextFormat: 2 });
+              }
+            } else if (top === 'interpolationSchemes') {
+              for (const t of ['interpolate(U)']) {
+                items.push({ label: t, kind: CompletionItemKind.Property, insertText: `${t}  $1;`, insertTextFormat: 2 });
+              }
+            }
+          } else {
+            addSchemes(cat);
+          }
         }
       }
     } else if (ctx.fileType === 'fvSolution') {
-      if (top === 'solvers') {
-        // Offer solver names
-        for (const [name, info] of Object.entries(this.db.linearSolvers || {})) {
-          items.push({ label: name, kind: CompletionItemKind.Method, detail: info.brief });
-        }
-        if (!sub) {
-          addKeywords({ solver: {type:'word'}, tolerance: {type:'scalar'}, relTol: {type:'scalar'} });
-        }
-      } else if (['SIMPLE','PIMPLE','PISO','FLUID'].includes(top)) {
-        addKeywords((this.db.algorithms?.[top] as AlgoInfo)?.keywords || {});
-      } else {
-        for (const k of ['solvers','relaxationFactors','SIMPLE','PIMPLE','PISO','FLUID'])
-          items.push({ label: k, kind: CompletionItemKind.Module });
-      }
-    } else if (ctx.fileType === 'controlDict') {
-      addKeywords(this.db.controlDict || {});
-    } else if (ctx.fileType === 'turbulenceProperties') {
-      if (top === 'RAS') {
-        for (const [n, m] of Object.entries(this.db.turbulenceModels?.RAS || {}))
-          items.push({ label: n, kind: CompletionItemKind.Class, detail: m.brief });
-        addKeywords({ turbulence: {type:'boolean'}, printCoeffs: {type:'boolean'} });
-      } else if (top === 'LES') {
-        for (const [n, m] of Object.entries(this.db.turbulenceModels?.LES || {}))
-          items.push({ label: n, kind: CompletionItemKind.Class, detail: m.brief });
-        addKeywords({ turbulence: {type:'boolean'}, delta: {type:'word'} });
-      } else {
-        items.push({ label: 'simulationType', kind: CompletionItemKind.Property, insertText: 'simulationType  ${1|RAS,LES,laminar|};', insertTextFormat: 2 });
-        items.push({ label: 'RAS', kind: CompletionItemKind.Module, insertText: 'RAS\n{\n    RASModel        $1;\n    turbulence      on;\n    printCoeffs     on;\n}\n', insertTextFormat: 2 });
-        items.push({ label: 'LES', kind: CompletionItemKind.Module, insertText: 'LES\n{\n    LESModel        $1;\n    turbulence      on;\n    delta           cubeRootVol;\n}\n', insertTextFormat: 2 });
-      }
-    } else if (ctx.fileType === 'boundaryField') {
-      if (ctx.currentKey === 'type' || sub === 'type') {
-        for (const [n, bc] of Object.entries(this.db.boundaryConditions || {}))
-          items.push({ label: n, kind: CompletionItemKind.Class, detail: bc.brief });
-      } else if (!top || top === 'boundaryField') {
-        // At depth 0 inside boundaryField → offer patch names from polyMesh/boundary
-        const caseRoot = findCaseRoot(doc.uri);
-        if (caseRoot) {
-          for (const patch of getBoundaryPatchNames(caseRoot)) {
-            items.push({
-              label: patch,
-              kind: CompletionItemKind.Variable,
-              detail: 'patch (from polyMesh/boundary)',
-              sortText: '!!patch_' + patch,
-              insertText: `${patch}\n{\n    type            \${1:fixedValue};\n    value           \${2:uniform 0};\n}\n`,
-              insertTextFormat: 2,
-            });
+      if (!top) {
+        if (ctx.cursorIn === 'key') {
+          for (const k of ['solvers', 'relaxationFactors', 'SIMPLE', 'PIMPLE', 'PISO', 'FLUID']) {
+            items.push({ label: k, kind: CompletionItemKind.Module, insertText: `${k}\n{\n    $1\n}\n`, insertTextFormat: 2 });
           }
         }
-        items.push({ label: 'type', kind: CompletionItemKind.Property, insertText: 'type            $1;', insertTextFormat: 2 });
-        items.push({ label: 'value', kind: CompletionItemKind.Property, insertText: 'value           ${1|uniform,nonuniform|} $2;', insertTextFormat: 2 });
+      } else if (top === 'solvers') {
+        if (!sub) {
+          if (ctx.cursorIn === 'key') {
+            for (const f of ['p', 'p_rgh', 'pFinal', 'U', 'k', 'epsilon', 'omega', 'nuTilda', 'T', 'rho', 'Phi', 'cellDisplacement', '"(U|k|epsilon|omega)"']) {
+              items.push({
+                label: f,
+                kind: CompletionItemKind.Struct,
+                insertText: `${f}\n{\n    solver          \${1:GAMG};\n    tolerance       \${2:1e-06};\n    relTol          \${3:0.1};\n}\n`,
+                insertTextFormat: 2,
+              });
+            }
+          }
+        } else {
+          if (ctx.cursorIn === 'key') {
+            addKeywords({
+              solver: { type: 'word', description: 'Linear solver' },
+              preconditioner: { type: 'word', description: 'Preconditioner' },
+              smoother: { type: 'word', description: 'Smoother' },
+              tolerance: { type: 'scalar', description: 'Absolute tolerance' },
+              relTol: { type: 'scalar', description: 'Relative tolerance' },
+              nSweeps: { type: 'int', description: 'Number of sweeps' },
+              cacheAgglomeration: { type: 'boolean', description: 'Cache agglomeration' },
+              nCellsInCoarsestLevel: { type: 'int', description: 'Cells in coarsest GAMG level' },
+              agglomerator: { type: 'word', description: 'Agglomerator algorithm' },
+              mergeLevels: { type: 'int', description: 'Merge levels' },
+              maxIter: { type: 'int', description: 'Max iterations' },
+              minIter: { type: 'int', description: 'Min iterations' },
+            });
+          } else {
+            if (ctx.currentKey === 'solver') {
+              for (const [name, info] of Object.entries(this.db.linearSolvers || {})) {
+                items.push({ label: name, kind: CompletionItemKind.Method, detail: info.brief });
+              }
+            } else if (ctx.currentKey === 'preconditioner') {
+              for (const p of ['DIC', 'DILU', 'FDIC', 'diagonal', 'none', 'GAMG']) {
+                items.push({ label: p, kind: CompletionItemKind.Method, detail: 'Preconditioner' });
+              }
+            } else if (ctx.currentKey === 'smoother') {
+              for (const s of ['GaussSeidel', 'symGaussSeidel', 'DICGaussSeidel', 'DILUGaussSeidel', 'DIC', 'DILU']) {
+                items.push({ label: s, kind: CompletionItemKind.Method, detail: 'Smoother' });
+              }
+            } else if (ctx.currentKey === 'agglomerator') {
+              for (const a of ['faceAreaPair', 'pair']) {
+                items.push({ label: a, kind: CompletionItemKind.Value, detail: 'Agglomerator' });
+              }
+            } else if (ctx.currentKey === 'cacheAgglomeration') {
+              for (const b of ['true', 'false', 'on', 'off']) {
+                items.push({ label: b, kind: CompletionItemKind.Keyword });
+              }
+            }
+          }
+        }
+      } else if (top === 'relaxationFactors') {
+        if (!sub) {
+          if (ctx.cursorIn === 'key') {
+            items.push({ label: 'fields', kind: CompletionItemKind.Module, insertText: 'fields\n{\n    p               0.3;\n}\n', insertTextFormat: 2 });
+            items.push({ label: 'equations', kind: CompletionItemKind.Module, insertText: 'equations\n{\n    U               0.7;\n    k               0.7;\n}\n', insertTextFormat: 2 });
+          }
+        } else if (sub === 'fields' && ctx.cursorIn === 'key') {
+          for (const f of ['p', 'p_rgh', 'rho']) {
+            items.push({ label: f, kind: CompletionItemKind.Property, insertText: `${f}           \${1:0.3};`, insertTextFormat: 2 });
+          }
+        } else if (sub === 'equations' && ctx.cursorIn === 'key') {
+          for (const f of ['U', 'k', 'epsilon', 'omega', 'nuTilda', 'T', '"(U|k|epsilon|omega)"']) {
+            items.push({ label: f, kind: CompletionItemKind.Property, insertText: `${f}           \${1:0.7};`, insertTextFormat: 2 });
+          }
+        }
+      } else if (['SIMPLE', 'PIMPLE', 'PISO', 'FLUID'].includes(top)) {
+        if (ctx.cursorIn === 'key') {
+          if (sub === 'residualControl') {
+            for (const f of ['p', 'p_rgh', 'U', 'k', 'epsilon', 'omega']) {
+              items.push({ label: f, kind: CompletionItemKind.Property, insertText: `${f}           \${1:1e-4};`, insertTextFormat: 2 });
+            }
+          } else {
+            addKeywords((this.db.algorithms?.[top] as AlgoInfo)?.keywords || {});
+            items.push({ label: 'residualControl', kind: CompletionItemKind.Module, insertText: 'residualControl\n{\n    p               1e-4;\n    U               1e-4;\n}\n', insertTextFormat: 2 });
+          }
+        } else {
+          if (ctx.currentKey === 'consistent' || ctx.currentKey === 'turbOnFinalIterOnly') {
+            for (const b of ['yes', 'no', 'true', 'false']) {
+              items.push({ label: b, kind: CompletionItemKind.Keyword });
+            }
+          }
+        }
+      }
+    } else if (ctx.fileType === 'controlDict') {
+      if (ctx.cursorIn === 'key') {
+        addKeywords(this.db.controlDict?.keywords || {});
       } else {
-        items.push({ label: 'type', kind: CompletionItemKind.Property, insertText: 'type            $1;', insertTextFormat: 2 });
-        items.push({ label: 'value', kind: CompletionItemKind.Property, insertText: 'value           ${1|uniform,nonuniform|} $2;', insertTextFormat: 2 });
+        if (ctx.currentKey === 'application') {
+          for (const s of COMMON_SOLVERS) {
+            items.push({ label: s, kind: CompletionItemKind.Value, detail: 'OpenFOAM solver' });
+          }
+        } else if (ctx.currentKey === 'startFrom') {
+          for (const opt of ['firstTime', 'startTime', 'latestTime']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        } else if (ctx.currentKey === 'stopAt') {
+          for (const opt of ['endTime', 'writeNow', 'noWriteNow', 'nextWrite']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        } else if (ctx.currentKey === 'writeControl') {
+          for (const opt of ['timeStep', 'runTime', 'adjustableRunTime', 'cpuTime', 'clockTime']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        } else if (ctx.currentKey === 'writeFormat') {
+          for (const opt of ['ascii', 'binary']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        } else if (ctx.currentKey === 'timeFormat') {
+          for (const opt of ['general', 'fixed', 'scientific']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        } else if (['runTimeModifiable', 'adjustTimeStep', 'writeCompression'].includes(ctx.currentKey)) {
+          for (const opt of ['true', 'false', 'yes', 'no', 'on', 'off']) {
+            items.push({ label: opt, kind: CompletionItemKind.Keyword });
+          }
+        }
+      }
+    } else if (ctx.fileType === 'turbulenceProperties') {
+      if (!top) {
+        if (ctx.cursorIn === 'key') {
+          items.push({ label: 'simulationType', kind: CompletionItemKind.Property, insertText: 'simulationType  ${1|RAS,LES,laminar|};', insertTextFormat: 2 });
+          items.push({ label: 'RAS', kind: CompletionItemKind.Module, insertText: 'RAS\n{\n    RASModel        kOmegaSST;\n    turbulence      on;\n    printCoeffs     on;\n}\n', insertTextFormat: 2 });
+          items.push({ label: 'LES', kind: CompletionItemKind.Module, insertText: 'LES\n{\n    LESModel        Smagorinsky;\n    turbulence      on;\n    printCoeffs     on;\n    delta           cubeRootVol;\n}\n', insertTextFormat: 2 });
+        } else if (ctx.currentKey === 'simulationType') {
+          for (const opt of ['RAS', 'LES', 'laminar']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        }
+      } else if (top === 'RAS') {
+        if (ctx.cursorIn === 'key') {
+          addKeywords({ RASModel: { type: 'word' }, turbulence: { type: 'boolean' }, printCoeffs: { type: 'boolean' } });
+        } else if (ctx.currentKey === 'RASModel') {
+          for (const [n, m] of Object.entries(this.db.turbulenceModels?.RAS || {})) {
+            items.push({ label: n, kind: CompletionItemKind.Class, detail: m.brief });
+          }
+        } else if (ctx.currentKey === 'turbulence' || ctx.currentKey === 'printCoeffs') {
+          for (const opt of ['on', 'off']) items.push({ label: opt, kind: CompletionItemKind.Keyword });
+        }
+      } else if (top === 'LES') {
+        if (ctx.cursorIn === 'key') {
+          addKeywords({ LESModel: { type: 'word' }, turbulence: { type: 'boolean' }, delta: { type: 'word' }, printCoeffs: { type: 'boolean' } });
+        } else if (ctx.currentKey === 'LESModel') {
+          for (const [n, m] of Object.entries(this.db.turbulenceModels?.LES || {})) {
+            items.push({ label: n, kind: CompletionItemKind.Class, detail: m.brief });
+          }
+        } else if (ctx.currentKey === 'delta') {
+          for (const opt of ['cubeRootVol', 'maxDeltaxyz', 'smooth', 'Prandtl', 'vanDriest']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        } else if (ctx.currentKey === 'turbulence' || ctx.currentKey === 'printCoeffs') {
+          for (const opt of ['on', 'off']) items.push({ label: opt, kind: CompletionItemKind.Keyword });
+        }
+      }
+    } else if (ctx.fileType === 'boundaryField') {
+      if (!top) {
+        if (ctx.cursorIn === 'key') {
+          items.push({ label: 'dimensions', kind: CompletionItemKind.Property, insertText: 'dimensions      [0 0 0 0 0 0 0];', insertTextFormat: 2 });
+          items.push({ label: 'internalField', kind: CompletionItemKind.Property, insertText: 'internalField   uniform 0;', insertTextFormat: 2 });
+          items.push({ label: 'boundaryField', kind: CompletionItemKind.Module, insertText: 'boundaryField\n{\n    $1\n}\n', insertTextFormat: 2 });
+        } else if (ctx.currentKey === 'internalField') {
+          for (const opt of ['uniform 0', 'uniform (0 0 0)', 'nonuniform']) {
+            items.push({ label: opt, kind: CompletionItemKind.Value });
+          }
+        }
+      } else if (top === 'boundaryField') {
+        if (!sub) {
+          if (ctx.cursorIn === 'key') {
+            const caseRoot = findCaseRoot(doc.uri);
+            const patchNames = caseRoot ? getBoundaryPatchNames(caseRoot) : [];
+            const allPatches = patchNames.length ? patchNames : ['inlet', 'outlet', 'walls', 'defaultFaces', 'symmetry', 'empty', 'wedge', 'ground', 'atmosphere'];
+            for (const patch of allPatches) {
+              items.push({
+                label: patch,
+                kind: CompletionItemKind.Variable,
+                detail: 'boundary patch',
+                sortText: '!!patch_' + patch,
+                insertText: `${patch}\n{\n    type            \${1:fixedValue};\n    value           \${2:uniform 0};\n}\n`,
+                insertTextFormat: 2,
+              });
+            }
+          }
+        } else {
+          if (ctx.cursorIn === 'key') {
+            for (const k of ['type', 'value', 'inletValue', 'gradient', 'internalField']) {
+              items.push({ label: k, kind: CompletionItemKind.Property, insertText: `${k}            $1;`, insertTextFormat: 2 });
+            }
+          } else if (ctx.currentKey === 'type') {
+            // Filter by the field's value type (scalar/vector/tensor/
+            // symmTensor) via BcInfo.appliesTo — this used to list every
+            // boundary condition unconditionally, offering e.g. vector-only
+            // BCs while editing a scalar field like `p`.
+            const fieldType = this.detectFieldValueType(doc);
+            const applicable = new Set(boundaryConditionsForFieldType(this.db.boundaryConditions || {}, fieldType));
+            for (const [n, bc] of Object.entries(this.db.boundaryConditions || {})) {
+              if (!applicable.has(n)) continue;
+              items.push({ label: n, kind: CompletionItemKind.Class, detail: bc.brief });
+            }
+          } else if (ctx.currentKey === 'value' || ctx.currentKey === 'inletValue') {
+            for (const opt of ['uniform 0', 'uniform (0 0 0)', 'nonuniform']) {
+              items.push({ label: opt, kind: CompletionItemKind.Value });
+            }
+          }
+        }
       }
     } else if (ctx.fileType === 'blockMeshDict') {
-      addKeywords(this.db.blockMesh || {});
+      if (ctx.cursorIn === 'key') {
+        addKeywords(this.db.blockMesh?.keywords || {});
+      }
     } else if (ctx.fileType === 'decomposeParDict') {
-      addKeywords(this.db.decomposePar || {});
+      if (ctx.cursorIn === 'key') {
+        addKeywords(this.db.decomposePar || {});
+      } else if (ctx.currentKey === 'method') {
+        for (const opt of ['scotch', 'simple', 'hierarchical', 'manual']) {
+          items.push({ label: opt, kind: CompletionItemKind.Value, detail: 'Decomposition method' });
+        }
+      }
     } else if (ctx.fileType === 'snappyHexMeshDict' || ctx.fileType === 'helyxHexMeshDict') {
       const caseRoot = findCaseRoot(doc.uri);
-      this.addSnappyCompletions(items, ctx.blockPath, ctx.cursorIn, ctx.currentKey, caseRoot, doc.uri);
+      this.addSnappyCompletions(items, ctx.blockPath, ctx.cursorIn, ctx.currentKey, caseRoot, doc.uri, ctx.fileType === 'helyxHexMeshDict');
     } else {
-      // General: offer everything
-      for (const cat of Object.values(BLOCK_TO_SCHEME)) addSchemes(cat);
-      addKeywords(this.db.controlDict || {});
+      // Fallback for file types without a specific schema/completion branch
+      // (transportProperties, regionProperties, phaseProperties,
+      // mapFieldsDict, truly unknown files, ...). Used to unconditionally
+      // suggest fvSchemes/fvSolution/controlDict keywords
+      // (solvers/SIMPLE/PIMPLE/ddtSchemes/...) here regardless of what file
+      // is actually open — genuinely misleading for e.g. a phaseProperties
+      // or regionProperties file. Only offer the FoamFile header snippet,
+      // which is legitimately generic to every OpenFOAM/Helyx dict file.
+      if (ctx.cursorIn === 'key') {
+        items.push({
+          label: 'FoamFile',
+          kind: CompletionItemKind.Module,
+          insertText: 'FoamFile\n{\n    version     2.0;\n    format      ascii;\n    class       dictionary;\n    object      ${1:name};\n}\n',
+          insertTextFormat: 2,
+        });
+      }
     }
 
-    return items;
+    return this.filterAndSortCompletions(items, typedPrefix);
   }
 
   // ── Geometry-aware completions for snappyHexMeshDict / helyxHexMeshDict ────
@@ -1164,7 +1605,8 @@ class OpenFOAMLanguageServer {
     cursorIn: 'key' | 'value',
     currentKey: string,
     caseRoot: string | null,
-    docUri: string,
+    _docUri: string,
+    isHelyx = false,
   ) {
     const top = blockPath[0] || '';
     const sub = blockPath[1] || '';
@@ -1264,14 +1706,36 @@ class OpenFOAMLanguageServer {
     }
 
     // ── Default: fall back to static snappyHexMesh keywords ─────────────────
-    for (const [kw, info] of Object.entries(this.db.snappyHexMesh || {})) {
-      items.push({
-        label: kw,
-        kind: CompletionItemKind.Property,
-        detail: (info as FieldSpec).description || '',
-        insertText: this.fieldSnippet(kw, info as FieldSpec),
-        insertTextFormat: 2,
-      });
+    // (merged across all four sub-dicts — this used to iterate
+    // `db.snappyHexMesh` itself, which is really `{castellatedMeshControls,
+    // snapControls, addLayersControls, meshQualityControls}`, each holding
+    // the actual keyword map; that offered the 4 category names as if they
+    // were plain keywords instead of real ones like `maxLocalCells`.)
+    if (cursorIn === 'key') {
+      const shm = this.db.snappyHexMesh;
+      let merged: Record<string, FieldSpec> = {
+        ...(shm?.castellatedMeshControls || {}),
+        ...(shm?.snapControls || {}),
+        ...(shm?.addLayersControls || {}),
+        ...(shm?.meshQualityControls || {}),
+      };
+      if (isHelyx) {
+        merged = withExtraKeys(merged, [
+          ...HELYX_CASTELLATED_EXTRA_KEYS, ...HELYX_SNAP_EXTRA_KEYS,
+          ...HELYX_ADD_LAYERS_EXTRA_KEYS, ...HELYX_MESH_QUALITY_EXTRA_KEYS,
+        ]);
+      }
+      const mergedEntries = Object.entries(merged)
+        .sort((a, b) => Number(!!b[1].required) - Number(!!a[1].required));
+      for (const [kw, info] of mergedEntries) {
+        items.push({
+          label: kw,
+          kind: CompletionItemKind.Property,
+          detail: (info.required ? '(required) ' : '') + (info.description || ''),
+          insertText: this.fieldSnippet(kw, info),
+          insertTextFormat: 2,
+        });
+      }
     }
   }
 
@@ -1303,17 +1767,12 @@ class OpenFOAMLanguageServer {
   private onSigHelp(params: TextDocumentPositionParams): SignatureHelp | null {
     const doc = this.docs.get(params.textDocument.uri);
     if (!doc || !this.db) return null;
+    const tree = this.getTree(doc);
+    if (!tree) return null;
 
-    const text   = doc.getText();
-    const offset = doc.offsetAt(params.position);
-    const before = text.slice(0, offset);
-    const lineStart = before.lastIndexOf('\n') + 1;
-    const line  = before.slice(lineStart);
-    const tokens = line.trim().split(/\s+/).filter(Boolean);
-    if (tokens.length < 1) return null;
-
-    const schemeName = tokens[0];
-    const argIndex   = tokens.length - 1;  // 0 = just typed scheme name, 1 = first arg ...
+    const ctx = tsSignatureHelpContext(tree, params.position);
+    if (!ctx) return null;
+    const { schemeName, activeParameter } = ctx;
 
     for (const members of Object.values(this.db.schemes || {})) {
       if (schemeName in members) {
@@ -1331,7 +1790,7 @@ class OpenFOAMLanguageServer {
         return {
           signatures: [{ label, documentation: { kind: MarkupKind.Markdown, value: info.brief || '' }, parameters: params_ }],
           activeSignature: 0,
-          activeParameter: Math.max(0, argIndex - 1),
+          activeParameter,
         } as SignatureHelp;
       }
     }
@@ -1360,23 +1819,29 @@ class OpenFOAMLanguageServer {
       diags.push({ range: r, message: msg, severity: sev, source: 'openfoam' });
     };
 
-    // Generic: unclosed braces
-    let depth = 0;
-    let lastOpenLine = 0;
     const lines = text.split('\n');
-    for (let li = 0; li < lines.length; li++) {
-      const ln = stripComments(lines[li]);
-      for (const ch of ln) {
-        if (ch === '{') { depth++; lastOpenLine = li; }
-        if (ch === '}') depth--;
-      }
-    }
-    if (depth > 0) addDiag(lastOpenLine, `Unclosed '{' block (${depth} unclosed)`, DiagnosticSeverity.Error);
-    if (depth < 0) addDiag(lines.length - 1, `Extra '}' (${-depth} too many)`, DiagnosticSeverity.Error);
+
+    // Unclosed/extra braces used to be checked here with a hand-written
+    // per-line character counter — removed in favor of collectParseErrors()
+    // below, which is both more precise (exact MISSING "}" location from
+    // the real parse tree, vs. "the last line a { was seen on") and
+    // actually correct (the old counter used stripComments() per line but
+    // had no concept of strings, so `pattern "{not a brace}";` would have
+    // miscounted; the parser handles this natively).
 
     // FoamFile header check
     if (!text.includes('FoamFile')) {
       addDiag(0, 'Missing FoamFile header block', DiagnosticSeverity.Warning);
+    }
+
+    // Tree-sitter-backed checks: raw parse errors (every file type — new
+    // capability, the old hand-scanned diagnostics never had this at all)
+    // plus schema-driven unknown-key/missing-required-key/enum checks
+    // (Phase 3) for the file types with real schema data available.
+    const tree = this.getTree(doc);
+    if (tree) {
+      this.pushSchemaDiags(diags, collectParseErrors(tree));
+      this.diagSchema(tree, ft, diags);
     }
 
     if (ft === 'fvSchemes') this.diagFvSchemes(lines, diags);
@@ -1390,6 +1855,97 @@ class OpenFOAMLanguageServer {
     this.diagIncludes(doc, lines, diags);
 
     return diags;
+  }
+
+  private static readonly SCHEMA_SEVERITY: Record<SchemaDiagnostic["severity"], DiagnosticSeverity> = {
+    error: DiagnosticSeverity.Error,
+    warning: DiagnosticSeverity.Warning,
+    hint: DiagnosticSeverity.Hint,
+  };
+
+  private pushSchemaDiags(diags: Diagnostic[], schemaDiags: SchemaDiagnostic[]) {
+    for (const d of schemaDiags) {
+      diags.push({
+        range: d.range,
+        message: d.message,
+        severity: OpenFOAMLanguageServer.SCHEMA_SEVERITY[d.severity],
+        source: 'openfoam',
+      });
+    }
+  }
+
+  // ── Schema-driven diagnostics (Phase 3) ──────────────────────────────────
+  // Generic unknown-key / missing-required-key / enum checks against the
+  // FieldSpec schemas in data/keyword-db.json (plus a few hand-authored
+  // coarse top-level schemas in treeSitter/knownSchemas.ts for file types
+  // whose content is otherwise dynamic). Additive alongside the existing
+  // diagXxx() functions below, which cover genuinely file-specific
+  // cross-field/cross-file checks the generic schema shape can't express
+  // (e.g. "PIMPLE requires nOuterCorrectors", "vertex index in range").
+  private diagSchema(tree: Tree, ft: OpenFOAMFileType, diags: Diagnostic[]) {
+    switch (ft) {
+      case 'controlDict':
+        this.pushSchemaDiags(diags, schemaValidate(tree, this.db.controlDict?.keywords || {}));
+        break;
+      case 'blockMeshDict':
+        this.pushSchemaDiags(diags, schemaValidate(tree, this.db.blockMesh?.keywords || {}));
+        break;
+      case 'decomposeParDict':
+        this.pushSchemaDiags(diags, schemaValidate(tree, this.db.decomposePar || {}));
+        break;
+      case 'fvSchemes':
+        this.pushSchemaDiags(diags, schemaValidate(tree, FVSCHEMES_TOP_LEVEL));
+        break;
+      case 'fvSolution':
+        this.pushSchemaDiags(diags, schemaValidate(tree, FVSOLUTION_TOP_LEVEL));
+        break;
+      case 'turbulenceProperties':
+        this.pushSchemaDiags(diags, schemaValidate(tree, TURBULENCE_PROPERTIES_TOP_LEVEL));
+        break;
+      case 'snappyHexMeshDict': {
+        const shm = this.db.snappyHexMesh;
+        this.pushSchemaDiags(diags, schemaValidate(tree, SNAPPY_TOP_LEVEL));
+        if (shm?.castellatedMeshControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'castellatedMeshControls', shm.castellatedMeshControls));
+        if (shm?.snapControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'snapControls', shm.snapControls));
+        if (shm?.addLayersControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'addLayersControls', shm.addLayersControls));
+        if (shm?.meshQualityControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'meshQualityControls', shm.meshQualityControls));
+        break;
+      }
+      // Phase 5: helyxHexMeshDict used to be entirely excluded from schema
+      // validation here (it shares snappyHexMeshDict's OpenFOAM-only
+      // schema, which produced 60+ false positives on real Helyx keywords
+      // like locationsInMesh/wrapper/crackDetection — see progress.md).
+      // Resolved by extending each schema with the real Helyx-specific
+      // keyword names found across every example file in examples/
+      // (treeSitter/knownSchemas.ts's HELYX_*_EXTRA_KEYS), plus relaxing
+      // `locationInMesh` since Helyx substitutes the plural
+      // `locationsInMesh` instead.
+      case 'helyxHexMeshDict': {
+        const shm = this.db.snappyHexMesh;
+        this.pushSchemaDiags(diags, schemaValidate(tree, HELYX_SNAPPY_TOP_LEVEL));
+        if (shm?.castellatedMeshControls) {
+          this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'castellatedMeshControls', helyxCastellatedSchema(shm.castellatedMeshControls)));
+        }
+        if (shm?.snapControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'snapControls', withExtraKeys(shm.snapControls, HELYX_SNAP_EXTRA_KEYS)));
+        if (shm?.addLayersControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'addLayersControls', withExtraKeys(shm.addLayersControls, HELYX_ADD_LAYERS_EXTRA_KEYS)));
+        if (shm?.meshQualityControls) this.pushSchemaDiags(diags, schemaValidateBlock(tree, 'meshQualityControls', withExtraKeys(shm.meshQualityControls, HELYX_MESH_QUALITY_EXTRA_KEYS)));
+        break;
+      }
+      case 'boundaryField':
+        this.pushSchemaDiags(diags, validateBoundaryConditions(tree, this.db.boundaryConditions || {}));
+        break;
+      case 'regionProperties':
+        this.pushSchemaDiags(diags, schemaValidate(tree, REGION_PROPERTIES));
+        break;
+      case 'phaseProperties':
+        this.pushSchemaDiags(diags, schemaValidate(tree, PHASE_PROPERTIES_TOP_LEVEL));
+        break;
+      case 'mapFieldsDict':
+        this.pushSchemaDiags(diags, schemaValidate(tree, MAP_FIELDS_DICT));
+        break;
+      default:
+        break;
+    }
   }
 
   private diagFvSchemes(lines: string[], diags: Diagnostic[]) {
@@ -1418,7 +1974,6 @@ class OpenFOAMLanguageServer {
   }
 
   private diagFvSolution(lines: string[], diags: Diagnostic[]) {
-    const ALGO_BLOCKS = new Set(['SIMPLE','PIMPLE','PISO','FLUID']);
     let currentBlock = '';
     let nOuterCorrSeen = false;
 
@@ -1545,14 +2100,9 @@ class OpenFOAMLanguageServer {
     }
 
     // $variable
-    const word = this.wordAt(doc, params.position);
-    if (!word) return null;
-    const text = doc.getText();
-    const offset = doc.offsetAt(params.position);
-    let wordStart = offset;
-    while (wordStart > 0 && /\w/.test(text[wordStart - 1])) wordStart--;
-    if (wordStart > 0 && text[wordStart - 1] === '$') {
-      const varDef = resolveVariable(word, doc.uri, caseRoot);
+    const dollarVar = this.dollarReferenceAt(doc, params.position);
+    if (dollarVar !== null) {
+      const varDef = resolveVariable(dollarVar, doc.uri, caseRoot);
       if (varDef) return Location.create(varDef.uri, {
         start: { line: varDef.line, character: 0 },
         end: { line: varDef.line, character: 1000 },
@@ -1589,6 +2139,9 @@ class OpenFOAMLanguageServer {
           }
         }
       } catch { /* skip */ }
+    }
+    if (partial) {
+      return this.filterAndSortCompletions(items, partial);
     }
     return items;
   }
@@ -1741,8 +2294,7 @@ class OpenFOAMLanguageServer {
   }
 
   private getFileType(doc: TextDocument): OpenFOAMFileType {
-    const ctx = this.getCursorContext(doc, { line: 0, character: 0 });
-    return ctx.fileType;
+    return this.detectFileType(doc);
   }
   private onDocumentFormatting(_params: DocumentFormattingParams): TextEdit[] {
     const doc = this.docs.get(_params.textDocument.uri);
@@ -2066,7 +2618,6 @@ class OpenFOAMLanguageServer {
 
     // ── 6. Unreferenced geometry entries ─────────────────────────────────────
     if (declaredGeomNames.size > 0) {
-      const textLower = text.toLowerCase();
       const referencedNames = new Set<string>();
       for (const blockName of ['refinementSurfaces', 'refinementRegions', 'features']) {
         let inBlock = false, depth = 0;
@@ -2197,11 +2748,21 @@ class OpenFOAMLanguageServer {
 
   // ── Utilities ─────────────────────────────────────────────────────────────
   private wordAt(doc: TextDocument, pos: Position): string | null {
-    const text = doc.getText();
-    const off  = doc.offsetAt(pos);
-    let s = off; while (s > 0 && /\w/.test(text[s-1])) s--;
-    let e = off; while (e < text.length && /\w/.test(text[e])) e++;
-    return s === e ? null : text.slice(s, e);
+    const tree = this.getTree(doc);
+    if (!tree) return null;
+    return tsWordAt(tree, pos)?.text ?? null;
+  }
+
+  /**
+   * If `pos` is on a `$reference` value, the variable name (without the
+   * leading `$`) — otherwise null. Tree-node-aware replacement for the
+   * `wordAt()` + "rescan backwards for a `$`" pattern duplicated in
+   * `onHover` and `onDefinition`.
+   */
+  private dollarReferenceAt(doc: TextDocument, pos: Position): string | null {
+    const tree = this.getTree(doc);
+    if (!tree) return null;
+    return tsDollarReferenceAt(tree, pos);
   }
 }
 
@@ -2213,6 +2774,9 @@ const FT_MAP: Record<string, OpenFOAMFileType> = {
   decomposeParDict: "decomposeParDict", turbulenceProperties: "turbulenceProperties",
   transportProperties: "transportProperties",
   thermophysicalProperties: "thermophysicalProperties",
+  regionProperties: "regionProperties",
+  phaseProperties: "phaseProperties",
+  mapFieldsDict: "mapFieldsDict",
   momentumTransport: "turbulenceProperties",
   U: "boundaryField", p: "boundaryField", k: "boundaryField",
   epsilon: "boundaryField", omega: "boundaryField", nut: "boundaryField",

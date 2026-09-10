@@ -25,12 +25,12 @@ export class OpenFOAMInlayHintsProvider implements vscode.InlayHintsProvider {
       const isOn = BOOL_ON.has(value.toLowerCase());
       const position = new vscode.Position(i, match[1].length);
 
-      const labelPart = new vscode.InlayHintLabelPart(isOn ? "⬤ " : "○ ");
-      labelPart.tooltip = isOn ? "ON — click to toggle off" : "OFF — click to toggle on";
+      const labelPart = new vscode.InlayHintLabelPart(isOn ? "⬤ " : "◯ ");
+      labelPart.tooltip = isOn ? "Toggle to off" : "Toggle to on";
       labelPart.command = {
-        title: "Toggle",
         command: "openfoam.toggleBoolean",
-        arguments: [document.uri, i],
+        title: "",
+        arguments: [i],
       };
 
       const hint = new vscode.InlayHint(

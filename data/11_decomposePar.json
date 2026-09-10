@@ -77,5 +77,10 @@
   "roots": {
     "type": "list",
     "required": false
+  },
+  "roots()": {
+    "type": "list",
+    "required": false,
+    "description": "Same as 'roots' with an empty list — real files sometimes write this with no space before '()', which tokenizes as one atomic keyword"
   }
 }

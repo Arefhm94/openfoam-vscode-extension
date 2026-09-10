@@ -3,9 +3,59 @@
 src/**
 .gitignore
 .vscodeignore
+.npmrc
 .trunk/**
 **/*.map
 **/tsconfig.json
 **/.eslintrc.json
 **/*.ts
 !out/**/*.js
+
+# Dev-only docs and planning notes — not needed at runtime.
+context/**
+LINKEDIN_POST.md
+_logo.png
+
+# Example case files — large (STLs etc.) and not used by any "insert
+# example" feature; the extension only needs them for its own test
+# fixtures, not at runtime.
+examples/**
+
+# Data extraction pipeline: scripts/ and data/01_*.json-data/12_*.json are
+# raw/intermediate extraction output only consumed by scripts/13_merge_database.py
+# to (re)build data/keyword-db.json, which is the only data file server.ts
+# actually loads at runtime (confirmed via `loadDb()`). The two legacy
+# openfoam-keywords.json/openfoam-solvers.json files are an older,
+# superseded fallback path, always shadowed by keyword-db.json once it
+# exists (which it always does in a packaged build).
+scripts/**
+data/01_scheme_registry.json
+data/02_constructor_signatures.json
+data/03_descriptions.json
+data/04_boundary_conditions.json
+data/05_fvSolution.json
+data/06_turbulence_models.json
+data/07_function_objects.json
+data/08_thermophysical.json
+data/09_snappyHexMesh.json
+data/10_blockMesh.json
+data/11_decomposePar.json
+data/12_controlDict.json
+data/openfoam-keywords.json
+data/openfoam-solvers.json
+data/README.md
+
+# Test files and CI config — not needed at runtime.
+test/**
+.github/**
+
+# Build artifacts / lockfile — not needed in the package.
+package-lock.json
+tsconfig.tsbuildinfo
+
+# Keep the tree-sitter-openfoam WASM grammar and web-tree-sitter's own
+# runtime WASM — both required at runtime by the language server. Neither
+# is matched by any pattern above, but stated explicitly so a future
+# broader `node_modules/**`-style exclusion doesn't accidentally catch them.
+!node_modules/tree-sitter-openfoam/**
+!node_modules/web-tree-sitter/**

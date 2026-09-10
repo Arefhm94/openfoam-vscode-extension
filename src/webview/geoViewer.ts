@@ -1,10 +1,7 @@
 import * as THREE from 'three';
 
-const geoPanel   = document.getElementById('geo-panel')   as HTMLElement;
-const splitHandle = document.getElementById('split-handle') as HTMLElement;
 const geoCanvas  = document.getElementById('geo-canvas')  as HTMLCanvasElement;
 const geoLabel   = document.getElementById('geo-label')   as HTMLElement;
-const geoClose   = document.getElementById('geo-close')   as HTMLElement;
 const axesCanvas = document.getElementById('axes-canvas') as HTMLCanvasElement;
 const axCtx      = axesCanvas?.getContext('2d') ?? null;
 
@@ -16,7 +13,7 @@ let ready = false;
 const target = new THREE.Vector3(0, 0, 0);
 
 // Z-up spherical orbit: phi=polar from Z, theta=azimuth
-let sph = { theta: Math.PI / 4, phi: Math.PI / 3, r: 3 };
+const sph = { theta: Math.PI / 4, phi: Math.PI / 3, r: 3 };
 let isDown = false, lx = 0, ly = 0;
 let dragMode: 'rotate' | 'pan' = 'rotate';
 
@@ -181,6 +178,11 @@ function parseSTL(bytes: Uint8Array, isBinary: boolean): THREE.BufferGeometry {
     geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(nrm), 3));
   }
 
+  normalizeGeometry(geo);
+  return geo;
+}
+
+function normalizeGeometry(geo: THREE.BufferGeometry): void {
   geo.computeBoundingBox();
   const c = new THREE.Vector3();
   geo.boundingBox!.getCenter(c);
@@ -190,6 +192,97 @@ function parseSTL(bytes: Uint8Array, isBinary: boolean): THREE.BufferGeometry {
   geo.boundingBox!.getSize(sz);
   const s = 2 / Math.max(sz.x, sz.y, sz.z, 0.001);
   geo.scale(s, s, s);
+}
+
+function parseOBJ(bytes: Uint8Array): THREE.BufferGeometry {
+  const text = new TextDecoder().decode(bytes);
+  const pos: number[] = [], nrm: number[] = [], idx: number[] = [];
+  const v: number[][] = [], vn: number[][] = [];
+  for (const ln of text.split('\n')) {
+    const t = ln.trim();
+    if (t.startsWith('v ')) {
+      const p = t.split(/\s+/);
+      v.push([+p[1], +p[2], +p[3]]);
+    } else if (t.startsWith('vn ')) {
+      const p = t.split(/\s+/);
+      vn.push([+p[1], +p[2], +p[3]]);
+    } else if (t.startsWith('f ')) {
+      const parts = t.split(/\s+/).slice(1);
+      for (const part of parts) {
+        const vi = parseInt(part.split('/')[0]);
+        idx.push(vi > 0 ? vi - 1 : v.length + vi);
+        if (vn.length) {
+          const ni = parseInt(part.split('/')[2] || '0');
+          const nvi = ni > 0 ? ni - 1 : vn.length + ni;
+          if (nvi >= 0 && nvi < vn.length) nrm.push(...vn[nvi]);
+        }
+      }
+    }
+  }
+  for (const vi of idx) if (vi >= 0 && vi < v.length) pos.push(...v[vi]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  if (nrm.length) geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nrm), 3));
+  geo.setIndex(idx);
+  normalizeGeometry(geo);
+  return geo;
+}
+
+function parseVTK(bytes: Uint8Array): THREE.BufferGeometry {
+  const text = new TextDecoder().decode(bytes);
+  const lines = text.split('\n');
+  const pos: number[] = [];
+  let i = 0;
+  // Skip header
+  while (i < lines.length && !lines[i].includes('POINTS')) i++;
+  if (i >= lines.length) return new THREE.BufferGeometry();
+  const ptsMatch = lines[i].match(/POINTS\s+(\d+)/);
+  if (!ptsMatch) return new THREE.BufferGeometry();
+  const numPts = parseInt(ptsMatch[1]);
+  i++;
+  const pts: number[] = [];
+  while (i < lines.length && pts.length < numPts * 3) {
+    const nums = lines[i].trim().split(/\s+/);
+    for (const n of nums) { const f = parseFloat(n); if (!isNaN(f)) pts.push(f); }
+    i++;
+  }
+  // Find POLYGONS or TRIANGLE_STRIP
+  while (i < lines.length && !lines[i].includes('POLYGONS') && !lines[i].includes('TRIANGLE_STRIP')) i++;
+  if (i >= lines.length) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+    normalizeGeometry(geo);
+    return geo;
+  }
+  const polyMatch = lines[i].match(/(POLYGONS|TRIANGLE_STRIP)\s+(\d+)\s+(\d+)/);
+  if (!polyMatch) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+    normalizeGeometry(geo);
+    return geo;
+  }
+  i++;
+  const numCells = parseInt(polyMatch[2]);
+  let count = 0;
+  while (i < lines.length && count < numCells) {
+    const nums = lines[i].trim().split(/\s+/);
+    if (nums.length >= 4) {
+      const nv = parseInt(nums[0]);
+      for (let j = 1; j < nv - 1; j++) {
+        const a = parseInt(nums[1]), b = parseInt(nums[1 + j]), c = parseInt(nums[1 + j + 1]);
+        if (!isNaN(a) && !isNaN(b) && !isNaN(c) && a >= 0 && b >= 0 && c >= 0 && a * 3 < pts.length && b * 3 < pts.length && c * 3 < pts.length) {
+          pos.push(pts[a * 3], pts[a * 3 + 1], pts[a * 3 + 2]);
+          pos.push(pts[b * 3], pts[b * 3 + 1], pts[b * 3 + 2]);
+          pos.push(pts[c * 3], pts[c * 3 + 1], pts[c * 3 + 2]);
+        }
+      }
+    }
+    count++;
+    i++;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  normalizeGeometry(geo);
   return geo;
 }
 
@@ -206,10 +299,18 @@ function getThumbRenderer(): THREE.WebGLRenderer {
   return thumbRenderer;
 }
 
-function renderMiniGeo(imgEl: HTMLImageElement, dataBase64: string, isBinary: boolean): void {
+function renderMiniGeo(imgEl: HTMLImageElement, dataBase64: string, isBinary: boolean, ext?: string): void {
   try {
     const bytes = b64ToBytes(dataBase64);
-    const geo   = parseSTL(bytes, isBinary);
+    const extLower = (ext || '.stl').toLowerCase();
+    let geo: THREE.BufferGeometry;
+    if (extLower === '.obj') {
+      geo = parseOBJ(bytes);
+    } else if (extLower === '.vtk') {
+      geo = parseVTK(bytes);
+    } else {
+      geo = parseSTL(bytes, isBinary);
+    }
     const r     = getThumbRenderer();
 
     const sc = new THREE.Scene();
@@ -236,29 +337,23 @@ function renderMiniGeo(imgEl: HTMLImageElement, dataBase64: string, isBinary: bo
   }
 }
 
-// ── Show / hide panel ─────────────────────────────────────────
-function showPanel() {
-  geoPanel.style.display   = 'flex';
-  splitHandle.style.display = 'block';
-}
-function hidePanel() {
-  geoPanel.style.display   = 'none';
-  splitHandle.style.display = 'none';
-  renderer?.setAnimationLoop(null);
-}
-
-geoClose?.addEventListener('click', hidePanel);
-
+// ── Message handler ────────────────────────────────────────────
 window.addEventListener('message', (ev: MessageEvent) => {
   const msg = ev.data;
   if (msg.command === 'previewGeometry') {
-    showPanel();
-    geoLabel.textContent = msg.fileName || '';
     init();
-    renderer?.setAnimationLoop(() => { renderer!.render(scene!, camera!); drawAxes(); });
+    geoLabel.textContent = msg.fileName || '';
     try {
       const bytes = b64ToBytes(msg.dataBase64);
-      const geo   = parseSTL(bytes, msg.isBinary);
+      const ext = (msg.fileName || '').toLowerCase();
+      let geo: THREE.BufferGeometry;
+      if (ext.endsWith('.obj')) {
+        geo = parseOBJ(bytes);
+      } else if (ext.endsWith('.vtk')) {
+        geo = parseVTK(bytes);
+      } else {
+        geo = parseSTL(bytes, msg.isBinary);
+      }
       if (mesh && scene) {
         scene.remove(mesh);
         mesh.geometry.dispose();
@@ -267,15 +362,21 @@ window.addEventListener('message', (ev: MessageEvent) => {
       const mat = new THREE.MeshPhongMaterial({ color: 0x4db8ff, specular: 0x334455, shininess: 40, side: THREE.DoubleSide });
       mesh = new THREE.Mesh(geo, mat);
       scene!.add(mesh);
+
+      // Reset camera to auto-fit the new geometry
+      sph.theta = Math.PI / 4;
+      sph.phi = Math.PI / 3;
+      sph.r = 3;
+      target.set(0, 0, 0);
+      updateCamera();
+
       const triCount = geo.attributes.position.count / 3;
       geoLabel.textContent = msg.fileName + ' — ' + triCount.toLocaleString() + ' tri  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom';
     } catch (err: any) {
       geoLabel.textContent = 'Parse error: ' + err.message;
     }
-  } else if (msg.command === 'hideGeoViewer') {
-    hidePanel();
   } else if (msg.command === 'geoDataReady') {
     const img = document.getElementById(msg.canvasId) as HTMLImageElement | null;
-    if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary);
+    if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary, msg.ext);
   }
 });

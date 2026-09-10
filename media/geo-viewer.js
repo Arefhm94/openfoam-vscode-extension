@@ -26581,11 +26581,8 @@ void main() {
   };
 
   // src/webview/geoViewer.ts
-  var geoPanel = document.getElementById("geo-panel");
-  var splitHandle = document.getElementById("split-handle");
   var geoCanvas = document.getElementById("geo-canvas");
   var geoLabel = document.getElementById("geo-label");
-  var geoClose = document.getElementById("geo-close");
   var axesCanvas = document.getElementById("axes-canvas");
   var axCtx = axesCanvas?.getContext("2d") ?? null;
   var scene = null;
@@ -26758,6 +26755,10 @@ void main() {
       geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
       geo.setAttribute("normal", new BufferAttribute(new Float32Array(nrm), 3));
     }
+    normalizeGeometry(geo);
+    return geo;
+  }
+  function normalizeGeometry(geo) {
     geo.computeBoundingBox();
     const c = new Vector3();
     geo.boundingBox.getCenter(c);
@@ -26767,6 +26768,96 @@ void main() {
     geo.boundingBox.getSize(sz);
     const s = 2 / Math.max(sz.x, sz.y, sz.z, 1e-3);
     geo.scale(s, s, s);
+  }
+  function parseOBJ(bytes) {
+    const text = new TextDecoder().decode(bytes);
+    const pos = [], nrm = [], idx = [];
+    const v = [], vn = [];
+    for (const ln of text.split("\n")) {
+      const t = ln.trim();
+      if (t.startsWith("v ")) {
+        const p = t.split(/\s+/);
+        v.push([+p[1], +p[2], +p[3]]);
+      } else if (t.startsWith("vn ")) {
+        const p = t.split(/\s+/);
+        vn.push([+p[1], +p[2], +p[3]]);
+      } else if (t.startsWith("f ")) {
+        const parts = t.split(/\s+/).slice(1);
+        for (const part of parts) {
+          const vi = parseInt(part.split("/")[0]);
+          idx.push(vi > 0 ? vi - 1 : v.length + vi);
+          if (vn.length) {
+            const ni = parseInt(part.split("/")[2] || "0");
+            const nvi = ni > 0 ? ni - 1 : vn.length + ni;
+            if (nvi >= 0 && nvi < vn.length) nrm.push(...vn[nvi]);
+          }
+        }
+      }
+    }
+    for (const vi of idx) if (vi >= 0 && vi < v.length) pos.push(...v[vi]);
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
+    if (nrm.length) geo.setAttribute("normal", new BufferAttribute(new Float32Array(nrm), 3));
+    geo.setIndex(idx);
+    normalizeGeometry(geo);
+    return geo;
+  }
+  function parseVTK(bytes) {
+    const text = new TextDecoder().decode(bytes);
+    const lines = text.split("\n");
+    const pos = [];
+    let i = 0;
+    while (i < lines.length && !lines[i].includes("POINTS")) i++;
+    if (i >= lines.length) return new BufferGeometry();
+    const ptsMatch = lines[i].match(/POINTS\s+(\d+)/);
+    if (!ptsMatch) return new BufferGeometry();
+    const numPts = parseInt(ptsMatch[1]);
+    i++;
+    const pts = [];
+    while (i < lines.length && pts.length < numPts * 3) {
+      const nums = lines[i].trim().split(/\s+/);
+      for (const n of nums) {
+        const f = parseFloat(n);
+        if (!isNaN(f)) pts.push(f);
+      }
+      i++;
+    }
+    while (i < lines.length && !lines[i].includes("POLYGONS") && !lines[i].includes("TRIANGLE_STRIP")) i++;
+    if (i >= lines.length) {
+      const geo2 = new BufferGeometry();
+      geo2.setAttribute("position", new BufferAttribute(new Float32Array(pts), 3));
+      normalizeGeometry(geo2);
+      return geo2;
+    }
+    const polyMatch = lines[i].match(/(POLYGONS|TRIANGLE_STRIP)\s+(\d+)\s+(\d+)/);
+    if (!polyMatch) {
+      const geo2 = new BufferGeometry();
+      geo2.setAttribute("position", new BufferAttribute(new Float32Array(pts), 3));
+      normalizeGeometry(geo2);
+      return geo2;
+    }
+    i++;
+    const numCells = parseInt(polyMatch[2]);
+    let count = 0;
+    while (i < lines.length && count < numCells) {
+      const nums = lines[i].trim().split(/\s+/);
+      if (nums.length >= 4) {
+        const nv = parseInt(nums[0]);
+        for (let j = 1; j < nv - 1; j++) {
+          const a = parseInt(nums[1]), b = parseInt(nums[1 + j]), c = parseInt(nums[1 + j + 1]);
+          if (!isNaN(a) && !isNaN(b) && !isNaN(c) && a >= 0 && b >= 0 && c >= 0 && a * 3 < pts.length && b * 3 < pts.length && c * 3 < pts.length) {
+            pos.push(pts[a * 3], pts[a * 3 + 1], pts[a * 3 + 2]);
+            pos.push(pts[b * 3], pts[b * 3 + 1], pts[b * 3 + 2]);
+            pos.push(pts[c * 3], pts[c * 3 + 1], pts[c * 3 + 2]);
+          }
+        }
+      }
+      count++;
+      i++;
+    }
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
+    normalizeGeometry(geo);
     return geo;
   }
   var thumbRenderer = null;
@@ -26780,10 +26871,18 @@ void main() {
     }
     return thumbRenderer;
   }
-  function renderMiniGeo(imgEl, dataBase64, isBinary) {
+  function renderMiniGeo(imgEl, dataBase64, isBinary, ext) {
     try {
       const bytes = b64ToBytes(dataBase64);
-      const geo = parseSTL(bytes, isBinary);
+      const extLower = (ext || ".stl").toLowerCase();
+      let geo;
+      if (extLower === ".obj") {
+        geo = parseOBJ(bytes);
+      } else if (extLower === ".vtk") {
+        geo = parseVTK(bytes);
+      } else {
+        geo = parseSTL(bytes, isBinary);
+      }
       const r = getThumbRenderer();
       const sc = new Scene();
       sc.background = new Color(1711395);
@@ -26808,29 +26907,22 @@ void main() {
       imgEl.style.opacity = "0.15";
     }
   }
-  function showPanel() {
-    geoPanel.style.display = "flex";
-    splitHandle.style.display = "block";
-  }
-  function hidePanel() {
-    geoPanel.style.display = "none";
-    splitHandle.style.display = "none";
-    renderer?.setAnimationLoop(null);
-  }
-  geoClose?.addEventListener("click", hidePanel);
   window.addEventListener("message", (ev) => {
     const msg = ev.data;
     if (msg.command === "previewGeometry") {
-      showPanel();
-      geoLabel.textContent = msg.fileName || "";
       init();
-      renderer?.setAnimationLoop(() => {
-        renderer.render(scene, camera);
-        drawAxes();
-      });
+      geoLabel.textContent = msg.fileName || "";
       try {
         const bytes = b64ToBytes(msg.dataBase64);
-        const geo = parseSTL(bytes, msg.isBinary);
+        const ext = (msg.fileName || "").toLowerCase();
+        let geo;
+        if (ext.endsWith(".obj")) {
+          geo = parseOBJ(bytes);
+        } else if (ext.endsWith(".vtk")) {
+          geo = parseVTK(bytes);
+        } else {
+          geo = parseSTL(bytes, msg.isBinary);
+        }
         if (mesh && scene) {
           scene.remove(mesh);
           mesh.geometry.dispose();
@@ -26839,16 +26931,19 @@ void main() {
         const mat = new MeshPhongMaterial({ color: 5093631, specular: 3359829, shininess: 40, side: DoubleSide });
         mesh = new Mesh(geo, mat);
         scene.add(mesh);
+        sph.theta = Math.PI / 4;
+        sph.phi = Math.PI / 3;
+        sph.r = 3;
+        target.set(0, 0, 0);
+        updateCamera();
         const triCount = geo.attributes.position.count / 3;
         geoLabel.textContent = msg.fileName + " \u2014 " + triCount.toLocaleString() + " tri  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom";
       } catch (err) {
         geoLabel.textContent = "Parse error: " + err.message;
       }
-    } else if (msg.command === "hideGeoViewer") {
-      hidePanel();
     } else if (msg.command === "geoDataReady") {
       const img = document.getElementById(msg.canvasId);
-      if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary);
+      if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary, msg.ext);
     }
   });
 })();

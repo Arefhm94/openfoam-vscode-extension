@@ -157,7 +157,7 @@ The extension ships with a pre-built `data/keyword-db.json`. To regenerate it fr
 src/
   extension.ts                       # Extension entry point
   language-server/server.ts          # LSP server (hover, completion, diagnostics)
-  workflow/InspectorPanel.ts         # Visual inspector webview
+  workflow/GeometryPreviewPanel.ts   # Standalone 3D geometry preview
   providers/
     OpenFOAMDocumentSymbolProvider.ts  # Outline view
     OpenFOAMCodeLensProvider.ts        # Inlay hints / boolean toggles

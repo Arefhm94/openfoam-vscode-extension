@@ -1,8 +1,13 @@
 {
   "application": {
     "type": "word",
-    "required": true,
-    "description": "Solver name"
+    "required": false,
+    "description": "Solver name (classic mechanism; OpenFOAM 9+ modular solvers use 'solver' instead — exactly one of the two is expected, but that either/or constraint isn't expressible in this schema, so neither is marked required)"
+  },
+  "solver": {
+    "type": "word",
+    "required": false,
+    "description": "Modular solver name (OpenFOAM 9+ alternative to 'application', e.g. incompressibleFluid, incompressibleVoF)"
   },
   "startFrom": {
     "type": "word",
@@ -69,8 +74,13 @@
     "default": 6
   },
   "writeCompression": {
-    "type": "boolean",
-    "default": false
+    "default": false,
+    "description": "Accepts boolean-style (on/off/true/false/yes/no) or word-style (compressed/uncompressed) values depending on OpenFOAM version"
+  },
+  "graphFormat": {
+    "type": "word",
+    "required": false,
+    "description": "Output format for function objects that write graph data (e.g. raw, gnuplot, xmgr)"
   },
   "timeFormat": {
     "type": "word",
@@ -97,6 +107,11 @@
     "type": "scalar",
     "required": false,
     "description": "Maximum Courant number"
+  },
+  "maxAlphaCo": {
+    "type": "scalar",
+    "required": false,
+    "description": "Maximum interface Courant number (VOF/multiphase solvers)"
   },
   "maxDeltaT": {
     "type": "scalar",

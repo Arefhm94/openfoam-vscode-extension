@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import {
@@ -6,13 +7,13 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
-import { InspectorPanel } from "./workflow/InspectorPanel";
+import { GeometryPreviewPanel } from "./workflow/GeometryPreviewPanel";
 import { OpenFOAMDocumentSymbolProvider } from "./providers/OpenFOAMDocumentSymbolProvider";
 import {
   OpenFOAMInlayHintsProvider,
   executeToggleBoolean,
 } from "./providers/OpenFOAMCodeLensProvider";
-import { OpenFOAMCaseTreeProvider } from "./providers/OpenFOAMCaseTreeProvider";
+import { OpenFOAMCaseTreeProvider, CaseItem } from "./providers/OpenFOAMCaseTreeProvider";
 
 let client: LanguageClient;
 
@@ -21,9 +22,6 @@ let client: LanguageClient;
  */
 export function activate(context: vscode.ExtensionContext) {
   console.log("Activating OpenFOAM Language Support extension...");
-
-  // Show activation message
-  vscode.window.showInformationMessage("OpenFOAM Language Support activated");
 
   // Start the language server
   client = startLanguageServer(context);
@@ -52,24 +50,33 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  const inspectorCommand = vscode.commands.registerCommand(
-    "openfoam.openInspector",
-    () => { InspectorPanel.createOrShow(context.extensionUri, context); },
-  );
-
   // Status bar item — shows when an OpenFOAM file is active
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.text = '$(file-code) OpenFOAM';
   statusBar.tooltip = 'OpenFOAM Language Support active';
-  statusBar.command = 'openfoam.openInspector';
   context.subscriptions.push(statusBar);
 
   const updateStatusBar = (editor?: vscode.TextEditor) => {
-    if (editor?.document.languageId === 'openfoam') statusBar.show();
-    else statusBar.hide();
+    if (editor?.document.languageId === 'openfoam') {
+      let text = '$(file-code) OpenFOAM';
+      const caseRoot = findCaseRoot(editor.document.uri.fsPath);
+      if (caseRoot) {
+        const truncated = caseRoot.length > 30 ? '...' + caseRoot.slice(-27) : caseRoot;
+        text += ` (${truncated})`;
+      }
+      const cfg = vscode.workspace.getConfiguration('openfoam');
+      if (!cfg.get<boolean>('validateBoundaryPatches', true)) text += ' $(warning)';
+      statusBar.text = text;
+      statusBar.show();
+    } else {
+      statusBar.hide();
+    }
   };
   updateStatusBar(vscode.window.activeTextEditor);
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateStatusBar));
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('openfoam')) updateStatusBar(vscode.window.activeTextEditor);
+  }));
 
   // Rebuild keyword database by running the Python pipeline scripts
   const rebuildDbCommand = vscode.commands.registerCommand(
@@ -138,15 +145,6 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  // When the active editor switches to an OpenFOAM file, push it to the inspector
-  const activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor(
-    (editor: vscode.TextEditor | undefined) => {
-      if (editor && InspectorPanel.currentPanel) {
-        InspectorPanel.currentPanel.loadDocument(editor.document);
-      }
-    },
-  );
-
   // Register Document Symbol Provider for outline view
   const documentSymbolProvider =
     vscode.languages.registerDocumentSymbolProvider(
@@ -160,10 +158,34 @@ export function activate(context: vscode.ExtensionContext) {
     new OpenFOAMInlayHintsProvider(),
   );
 
+  // Register code action provider for boolean toggle
+  const boolCodeActionProvider = vscode.languages.registerCodeActionsProvider(
+    { language: "openfoam" },
+    {
+      provideCodeActions(document: vscode.TextDocument, range: vscode.Range): vscode.CodeAction[] {
+        const BOOL_RE = /\b(true|false|yes|no|on|off)\b/i;
+        const line = document.lineAt(range.start.line).text;
+        const match = BOOL_RE.exec(line);
+        if (!match) return [];
+        const idx = line.indexOf(match[0]);
+        if (idx < 0) return [];
+        const action = new vscode.CodeAction('Toggle Boolean', vscode.CodeActionKind.QuickFix);
+        action.command = {
+          command: 'openfoam.toggleBoolean',
+          title: 'Toggle Boolean',
+          arguments: [range.start.line],
+        };
+        return [action];
+      },
+    },
+  );
+
   const toggleBooleanCommand = vscode.commands.registerCommand(
     "openfoam.toggleBoolean",
-    async (uri: vscode.Uri, lineNumber: number) => {
-      await executeToggleBoolean(uri, lineNumber);
+    async (lineNumber: number) => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      await executeToggleBoolean(editor.document.uri, lineNumber);
     },
   );
 
@@ -178,7 +200,94 @@ export function activate(context: vscode.ExtensionContext) {
     () => caseTreeProvider.refresh(),
   );
 
-  // Preview geometry file (STL/OBJ) in the Inspector panel 3D viewer
+  // Auto-refresh Case Explorer on file system changes
+  const caseWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+  caseWatcher.onDidCreate(() => caseTreeProvider.refresh());
+  caseWatcher.onDidDelete(() => caseTreeProvider.refresh());
+  caseWatcher.onDidChange(() => caseTreeProvider.refresh());
+
+  // Find file in case quick-pick
+  const findFileCommand = vscode.commands.registerCommand(
+    'openfoam.findFileInCase',
+    async () => {
+      const ws = vscode.workspace.workspaceFolders?.[0];
+      if (!ws) { vscode.window.showInformationMessage('No workspace folder open'); return; }
+      const caseRoot = findCaseRoot(ws.uri.fsPath) || ws.uri.fsPath;
+      const files: vscode.QuickPickItem[] = [];
+      function walkDir(dir: string) {
+        try {
+          for (const entry of fs.readdirSync(dir)) {
+            const fp = path.join(dir, entry);
+            const stat = fs.statSync(fp);
+            if (stat.isDirectory() && !entry.startsWith('.')) walkDir(fp);
+            else if (stat.isFile()) files.push({ label: entry, description: path.relative(caseRoot, fp) });
+          }
+        } catch { /* */ }
+      }
+      walkDir(caseRoot);
+      if (!files.length) { vscode.window.showInformationMessage('No files found in case'); return; }
+      const sel = await vscode.window.showQuickPick(files, { placeHolder: 'Search files in case...', matchOnDescription: true });
+      if (sel) {
+        const doc = await vscode.workspace.openTextDocument(path.join(caseRoot, sel.description!));
+        vscode.window.showTextDocument(doc);
+      }
+    },
+  );
+
+  // Switch active case root in a multi-root workspace
+  const switchCaseRootCommand = vscode.commands.registerCommand(
+    'openfoam.switchCaseRoot',
+    async () => {
+      const folders = vscode.workspace.workspaceFolders;
+      if (!folders || folders.length < 2) {
+        vscode.window.showInformationMessage('Open a multi-root workspace with multiple OpenFOAM cases.');
+        return;
+      }
+      const picks = folders.map(f => ({ label: f.name, description: f.uri.fsPath }));
+      const sel = await vscode.window.showQuickPick(picks, { placeHolder: 'Select case root' });
+      if (!sel) return;
+      context.workspaceState.update('activeCaseRoot', sel.description);
+      // Refresh the case tree
+      caseTreeProvider.refresh();
+      vscode.window.showInformationMessage(`Switched to: ${sel.label}`);
+    },
+  );
+
+  // Context menu commands for Case Explorer
+  const copyRelativePathCommand = vscode.commands.registerCommand(
+    'openfoam.copyRelativePath',
+    async (item: CaseItem) => {
+      if (!item.resourceUri) return;
+      const ws = vscode.workspace.workspaceFolders?.[0];
+      const relPath = ws ? path.relative(ws.uri.fsPath, item.resourceUri.fsPath) : item.resourceUri.fsPath;
+      vscode.env.clipboard.writeText(relPath);
+      vscode.window.showInformationMessage(`Copied: ${relPath}`);
+    },
+  );
+  const revealInFinderCommand = vscode.commands.registerCommand(
+    'openfoam.revealInFinder',
+    (item: CaseItem) => {
+      if (item.resourceUri) vscode.commands.executeCommand('revealFileInOS', item.resourceUri);
+    },
+  );
+  const duplicateFileCommand = vscode.commands.registerCommand(
+    'openfoam.duplicateFile',
+    async (item: CaseItem) => {
+      if (!item.resourceUri) return;
+      const ext = path.extname(item.resourceUri.fsPath);
+      const base = path.basename(item.resourceUri.fsPath, ext);
+      const newName = await vscode.window.showInputBox({ value: base + '_copy' + ext, placeHolder: 'New filename' });
+      if (!newName) return;
+      const newPath = path.join(path.dirname(item.resourceUri.fsPath), newName);
+      try {
+        require('fs').copyFileSync(item.resourceUri.fsPath, newPath);
+        vscode.window.showInformationMessage(`Duplicated to: ${newName}`);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to duplicate: ${e.message}`);
+      }
+    },
+  );
+
   const previewGeometryCommand = vscode.commands.registerCommand(
     'openfoam.previewGeometry',
     async (filePathOrUri?: vscode.Uri | string) => {
@@ -212,8 +321,8 @@ export function activate(context: vscode.ExtensionContext) {
         filePath = path.join(sel.description!, sel.label);
       }
       if (!filePath) return;
-      InspectorPanel.createOrShow(context.extensionUri, context);
-      InspectorPanel.currentPanel?.previewGeometry(filePath);
+      const panel = GeometryPreviewPanel.createOrShow(context.extensionUri);
+      if (panel) panel.previewGeometry(filePath);
     },
   );
 
@@ -240,23 +349,11 @@ export function activate(context: vscode.ExtensionContext) {
 
       const filePath = document.uri.fsPath;
       const fileName = path.basename(filePath);
-      const dirName = path.basename(path.dirname(filePath));
 
-      // Check if file is in OpenFOAM-related directories
-      const isInOpenFOAMDir =
-        filePath.includes("/system/") ||
-        filePath.includes("/constant/") ||
-        /\/\d+(\.\d+)?\//.test(filePath) || // Time directories like /0/, /1/, /0.5/
-        dirName === "system" ||
-        dirName === "constant" ||
-        /^\d+(\.\d+)?$/.test(dirName); // Directory name is a number
-
-      // Check if file has no extension or has .orig extension
       const hasNoExtension = !fileName.includes(".");
       const hasOrigExtension = fileName.endsWith(".orig");
 
-      // Auto-detect if in OpenFOAM directory structure and has no extension
-      if (isInOpenFOAMDir && (hasNoExtension || hasOrigExtension)) {
+      if ((hasNoExtension || hasOrigExtension) && _isInOpenFOAMCase(filePath)) {
         try {
           await vscode.languages.setTextDocumentLanguage(document, "openfoam");
         } catch (error) {
@@ -274,20 +371,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     const filePath = document.uri.fsPath;
     const fileName = path.basename(filePath);
-    const dirName = path.basename(path.dirname(filePath));
-
-    const isInOpenFOAMDir =
-      filePath.includes("/system/") ||
-      filePath.includes("/constant/") ||
-      /\/\d+(\.\d+)?\//.test(filePath) ||
-      dirName === "system" ||
-      dirName === "constant" ||
-      /^\d+(\.\d+)?$/.test(dirName);
 
     const hasNoExtension = !fileName.includes(".");
     const hasOrigExtension = fileName.endsWith(".orig");
 
-    if (isInOpenFOAMDir && (hasNoExtension || hasOrigExtension)) {
+    if ((hasNoExtension || hasOrigExtension) && _isInOpenFOAMCase(filePath)) {
       try {
         await vscode.languages.setTextDocumentLanguage(document, "openfoam");
       } catch (error) {
@@ -299,19 +387,24 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     refreshCommand,
     setLanguageCommand,
-    inspectorCommand,
     rebuildDbCommand,
     showSchemeDocCommand,
     insertTurbCommand,
-    activeEditorWatcher,
     documentSymbolProvider,
     inlayHintsProvider,
     toggleBooleanCommand,
+    boolCodeActionProvider,
     autoDetectDisposable,
     caseTreeView,
     refreshCaseTreeCommand,
     previewGeometryCommand,
     formatOnSaveDisposable,
+    caseWatcher,
+    findFileCommand,
+    switchCaseRootCommand,
+    copyRelativePathCommand,
+    revealInFinderCommand,
+    duplicateFileCommand,
   );
 
   console.log("OpenFOAM Language Support extension activated");
@@ -325,6 +418,55 @@ export function deactivate(): Thenable<void> | undefined {
     return undefined;
   }
   return client.stop();
+}
+
+/**
+ * Find the OpenFOAM case root by walking up from a file path.
+ */
+function findCaseRoot(filePath: string): string | null {
+  let dir = path.dirname(filePath);
+  for (let i = 0; i < 12; i++) {
+    if (fs.existsSync(path.join(dir, 'system', 'controlDict')) || fs.existsSync(path.join(dir, 'system', 'fvSchemes'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Check if a file path is inside an OpenFOAM case directory.
+ * Walks up from the file to find system/ or constant/ siblings.
+ */
+function _isInOpenFOAMCase(filePath: string): boolean {
+  const WITH_SYSTEM = /\/system\//.test(filePath);
+  const WITH_CONSTANT = /\/constant\//.test(filePath);
+  const IN_TIME_DIR = /\/\d+(\.\d+)?\//.test(filePath);
+  if (WITH_SYSTEM || WITH_CONSTANT) return true;
+  if (!IN_TIME_DIR) {
+    const dirName = path.basename(path.dirname(filePath));
+    if (dirName === "system" || dirName === "constant" || /^\d+(\.\d+)?$/.test(dirName)) {
+      let dir = path.dirname(filePath);
+      for (let i = 0; i < 3; i++) {
+        const parent = path.dirname(dir);
+        if (parent === dir) return false;
+        if (fs.existsSync(path.join(parent, "system", "controlDict")) ||
+            fs.existsSync(path.join(parent, "system", "fvSchemes"))) return true;
+        dir = parent;
+      }
+    }
+    return false;
+  }
+  // In a time directory — walk up to verify it's an OF case
+  let dir = path.dirname(filePath);
+  for (let i = 0; i < 4; i++) {
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    if (fs.existsSync(path.join(parent, "system", "controlDict")) ||
+        fs.existsSync(path.join(parent, "system", "fvSchemes"))) return true;
+    dir = parent;
+  }
+  return false;
 }
 
 /**

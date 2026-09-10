@@ -6,6 +6,11 @@
       "default": 1.0,
       "description": "Global coordinate scaling factor"
     },
+    "convertToMeters": {
+      "type": "scalar",
+      "required": false,
+      "description": "Older/alternate name for 'scale', still widely used and accepted"
+    },
     "vertices": {
       "type": "list",
       "required": true,
@@ -23,8 +28,13 @@
     },
     "boundary": {
       "type": "list",
-      "required": true,
-      "description": "Patch definitions with type and faces"
+      "required": false,
+      "description": "Patch definitions with type and faces (some versions use 'patches' instead — one of the two is expected, but that either/or constraint isn't expressible in this schema)"
+    },
+    "patches": {
+      "type": "list",
+      "required": false,
+      "description": "Alternate name for 'boundary' used by some versions"
     },
     "mergePatchPairs": {
       "type": "list",

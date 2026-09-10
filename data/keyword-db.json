@@ -1,6 +1,6 @@
 {
   "version": "13",
-  "generatedAt": "2026-05-25T09:13:30.762696+00:00",
+  "generatedAt": "2026-09-09T21:58:48.049956+00:00",
   "contexts": {
     "fvSchemes.gradSchemes.*": {
       "schemes": {
@@ -9922,6 +9922,11 @@
         "value": {
           "required": false,
           "type": "field"
+        },
+        "gradient": {
+          "required": false,
+          "type": "field",
+          "description": "Explicit gradient override"
         }
       }
     },
@@ -9942,6 +9947,16 @@
         "value": {
           "required": true,
           "type": "field"
+        },
+        "psi": {
+          "required": false,
+          "type": "word",
+          "description": "Compressibility field name, or 'none'"
+        },
+        "gamma": {
+          "required": false,
+          "type": "scalar",
+          "description": "Ratio of specific heats (cp/cv)"
         }
       }
     },
@@ -11511,6 +11526,11 @@
         "default": 1.0,
         "description": "Global coordinate scaling factor"
       },
+      "convertToMeters": {
+        "type": "scalar",
+        "required": false,
+        "description": "Older/alternate name for 'scale', still widely used and accepted"
+      },
       "vertices": {
         "type": "list",
         "required": true,
@@ -11528,8 +11548,13 @@
       },
       "boundary": {
         "type": "list",
-        "required": true,
-        "description": "Patch definitions with type and faces"
+        "required": false,
+        "description": "Patch definitions with type and faces (some versions use 'patches' instead \u2014 one of the two is expected, but that either/or constraint isn't expressible in this schema)"
+      },
+      "patches": {
+        "type": "list",
+        "required": false,
+        "description": "Alternate name for 'boundary' used by some versions"
       },
       "mergePatchPairs": {
         "type": "list",
@@ -11657,14 +11682,24 @@
     "roots": {
       "type": "list",
       "required": false
+    },
+    "roots()": {
+      "type": "list",
+      "required": false,
+      "description": "Same as 'roots' with an empty list \u2014 real files sometimes write this with no space before '()', which tokenizes as one atomic keyword"
     }
   },
   "controlDict": {
     "keywords": {
       "application": {
         "type": "word",
-        "required": true,
-        "description": "Solver name"
+        "required": false,
+        "description": "Solver name (classic mechanism; OpenFOAM 9+ modular solvers use 'solver' instead \u2014 exactly one of the two is expected, but that either/or constraint isn't expressible in this schema, so neither is marked required)"
+      },
+      "solver": {
+        "type": "word",
+        "required": false,
+        "description": "Modular solver name (OpenFOAM 9+ alternative to 'application', e.g. incompressibleFluid, incompressibleVoF)"
       },
       "startFrom": {
         "type": "word",
@@ -11731,8 +11766,13 @@
         "default": 6
       },
       "writeCompression": {
-        "type": "boolean",
-        "default": false
+        "default": false,
+        "description": "Accepts boolean-style (on/off/true/false/yes/no) or word-style (compressed/uncompressed) values depending on OpenFOAM version"
+      },
+      "graphFormat": {
+        "type": "word",
+        "required": false,
+        "description": "Output format for function objects that write graph data (e.g. raw, gnuplot, xmgr)"
       },
       "timeFormat": {
         "type": "word",
@@ -11759,6 +11799,11 @@
         "type": "scalar",
         "required": false,
         "description": "Maximum Courant number"
+      },
+      "maxAlphaCo": {
+        "type": "scalar",
+        "required": false,
+        "description": "Maximum interface Courant number (VOF/multiphase solvers)"
       },
       "maxDeltaT": {
         "type": "scalar",

@@ -1,12 +1,24 @@
 import * as vscode from "vscode";
+import type { Parser as TSParser } from "../treeSitter/parser";
+import { getParser, parseText } from "../treeSitter/parser";
+import { buildOutline, OutlineNode, SimpleRange } from "../treeSitter/queries";
 
 /**
- * Document Symbol Provider for OpenFOAM files
- * Provides outline view support showing dictionary structure with colored icons
+ * Document Symbol Provider for OpenFOAM files.
+ * Provides outline view support showing dictionary structure with colored
+ * icons, built from the tree-sitter-openfoam parse tree (via `buildOutline`)
+ * rather than an independent line-by-line regex parser.
  */
 export class OpenFOAMDocumentSymbolProvider
   implements vscode.DocumentSymbolProvider
 {
+  private parserPromise: Promise<TSParser> | undefined;
+
+  private getSharedParser(): Promise<TSParser> {
+    if (!this.parserPromise) this.parserPromise = getParser();
+    return this.parserPromise;
+  }
+
   /**
    * Determine the appropriate symbol kind based on the name and context
    */
@@ -97,203 +109,33 @@ export class OpenFOAMDocumentSymbolProvider
     return vscode.SymbolKind.Class;
   }
 
+  private toRange(r: SimpleRange): vscode.Range {
+    return new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);
+  }
+
+  private toSymbol(node: OutlineNode): vscode.DocumentSymbol {
+    const isBlock = node.kind === "block";
+    const displayName = isBlock ? node.name : `${node.name}: ${node.detail}`;
+    const symbol = new vscode.DocumentSymbol(
+      displayName,
+      "",
+      this.getSymbolKind(displayName, isBlock),
+      this.toRange(node.range),
+      this.toRange(node.selectionRange),
+    );
+    symbol.children = node.children.map(child => this.toSymbol(child));
+    return symbol;
+  }
+
   /**
    * Provide document symbols for the outline view
    */
-  public provideDocumentSymbols(
+  public async provideDocumentSymbols(
     document: vscode.TextDocument,
-    token: vscode.CancellationToken,
-  ): vscode.ProviderResult<vscode.DocumentSymbol[]> {
-    const symbols: vscode.DocumentSymbol[] = [];
-    const text = document.getText();
-    const lines = text.split("\n");
-
-    // Stack to track nested blocks
-    const blockStack: Array<{
-      symbol: vscode.DocumentSymbol;
-      startLine: number;
-    }> = [];
-
-    // Parse the document line by line
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
-
-      // Skip empty lines and full-line comments
-      if (trimmedLine.length === 0 || trimmedLine.startsWith("//")) {
-        continue;
-      }
-
-      // Skip multi-line comment blocks (simple detection)
-      if (
-        trimmedLine.startsWith("/*") ||
-        trimmedLine.includes("===") ||
-        trimmedLine.startsWith("*")
-      ) {
-        continue;
-      }
-
-      // Detect inline blocks (name { ... } all on one line)
-      const inlineBlockMatch = trimmedLine.match(
-        /^([a-zA-Z_][\w\.\-]*)\s*\{[^}]+\}/,
-      );
-      if (inlineBlockMatch) {
-        const name = inlineBlockMatch[1];
-        // Extract the content between braces for display
-        const contentMatch = trimmedLine.match(/\{([^}]+)\}/);
-        let detail = "";
-        if (contentMatch) {
-          const content = contentMatch[1].trim();
-          // Show first key-value pair as detail
-          const firstParam = content.split(";")[0].trim();
-          detail =
-            firstParam.length > 40
-              ? firstParam.substring(0, 40) + "..."
-              : firstParam;
-        }
-
-        const symbolKind = this.getSymbolKind(name, true);
-        const symbol = new vscode.DocumentSymbol(
-          name,
-          detail,
-          symbolKind,
-          new vscode.Range(i, 0, i, line.length),
-          new vscode.Range(i, 0, i, line.length),
-        );
-
-        if (blockStack.length > 0) {
-          blockStack[blockStack.length - 1].symbol.children.push(symbol);
-        } else {
-          symbols.push(symbol);
-        }
-        continue;
-      }
-
-      // Detect opening brace (start of a block)
-      if (trimmedLine === "{") {
-        // Look back to find the block name
-        for (let j = i - 1; j >= 0; j--) {
-          const prevLine = lines[j].trim();
-          if (
-            prevLine.length > 0 &&
-            !prevLine.startsWith("//") &&
-            !prevLine.startsWith("/*") &&
-            !prevLine.startsWith("*")
-          ) {
-            const blockName = prevLine;
-            const symbolKind = this.getSymbolKind(blockName, true);
-            const symbol = new vscode.DocumentSymbol(
-              blockName,
-              "",
-              symbolKind,
-              new vscode.Range(j, 0, i, line.length),
-              new vscode.Range(j, 0, j, lines[j].length),
-            );
-
-            if (blockStack.length > 0) {
-              blockStack[blockStack.length - 1].symbol.children.push(symbol);
-            } else {
-              symbols.push(symbol);
-            }
-
-            blockStack.push({ symbol, startLine: j });
-            break;
-          }
-        }
-        continue;
-      }
-
-      // Detect closing brace (end of a block)
-      if (trimmedLine === "}" || trimmedLine === "};") {
-        if (blockStack.length > 0) {
-          const block = blockStack.pop();
-          if (block) {
-            // Update the range to include the closing brace
-            block.symbol.range = new vscode.Range(
-              block.startLine,
-              0,
-              i,
-              line.length,
-            );
-          }
-        }
-        continue;
-      }
-
-      // Detect block name followed by opening brace on the same line
-      const blockWithBraceMatch = trimmedLine.match(
-        /^([a-zA-Z_][\w\.\-]*)\s*\{$/,
-      );
-      if (blockWithBraceMatch) {
-        const blockName = blockWithBraceMatch[1];
-        const symbolKind = this.getSymbolKind(blockName, true);
-        const symbol = new vscode.DocumentSymbol(
-          blockName,
-          "",
-          symbolKind,
-          new vscode.Range(i, 0, i, line.length),
-          new vscode.Range(i, 0, i, line.length),
-        );
-
-        if (blockStack.length > 0) {
-          blockStack[blockStack.length - 1].symbol.children.push(symbol);
-        } else {
-          symbols.push(symbol);
-        }
-
-        blockStack.push({ symbol, startLine: i });
-        continue;
-      }
-
-      // Detect key-value pairs with semicolon (but not inline blocks)
-      if (trimmedLine.includes(";") && !trimmedLine.includes("{")) {
-        const kvMatch = trimmedLine.match(
-          /^([a-zA-Z_][\w\.\-]*)\s+(.+?);?\s*$/,
-        );
-        if (kvMatch) {
-          const [, key, value] = kvMatch;
-          const cleanValue = value.replace(/;$/, "").trim();
-          const displayName = `${key}: ${cleanValue}`;
-
-          const symbolKind = this.getSymbolKind(displayName, false);
-          const symbol = new vscode.DocumentSymbol(
-            displayName,
-            "",
-            symbolKind,
-            new vscode.Range(i, 0, i, line.length),
-            new vscode.Range(i, 0, i, line.length),
-          );
-
-          if (blockStack.length > 0) {
-            blockStack[blockStack.length - 1].symbol.children.push(symbol);
-          } else {
-            symbols.push(symbol);
-          }
-        }
-        continue;
-      }
-
-      // Detect key-value pairs without semicolon (like solver incompressibleVoF;)
-      const kvNoSemiMatch = trimmedLine.match(
-        /^([a-zA-Z_][\w\.\-]*)\s+([^\s\{;]+)\s*$/,
-      );
-      if (kvNoSemiMatch && blockStack.length === 0) {
-        const [, key, value] = kvNoSemiMatch;
-        const displayName = `${key}: ${value}`;
-
-        const symbolKind = this.getSymbolKind(displayName, false);
-        const symbol = new vscode.DocumentSymbol(
-          displayName,
-          "",
-          symbolKind,
-          new vscode.Range(i, 0, i, line.length),
-          new vscode.Range(i, 0, i, line.length),
-        );
-
-        symbols.push(symbol);
-      }
-    }
-
-    return symbols;
+    _token: vscode.CancellationToken,
+  ): Promise<vscode.DocumentSymbol[]> {
+    const parser = await this.getSharedParser();
+    const tree = parseText(parser, document.getText());
+    return buildOutline(tree).map(node => this.toSymbol(node));
   }
 }
