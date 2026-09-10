@@ -4,6 +4,20 @@ All notable changes to the OpenFOAM Dictionary Support extension are
 documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.1] — 2026-09-10
+
+### Fixed
+
+- `#include` paths using OpenFOAM/HELYX environment variables — most
+  commonly `#include "$FOAM_CASE/system/includeDicts/..."` — were
+  incorrectly flagged as *"cannot find"* even when the target file
+  existed. The include resolver now expands `$FOAM_CASE` (and
+  `${FOAM_CASE}`, `$FOAM_CASENAME`, `$WM_PROJECT_DIR`, `$FOAM_ETC`, and a
+  few other standard OpenFOAM variables) before checking the filesystem.
+  Absolute include paths are now also honored. Unknown variables are left
+  untouched, so resolution just fails cleanly as before rather than
+  matching the wrong thing.
+
 ## [0.7.0] — 2026-09-10 — tree-sitter overhaul
 
 A ground-up rework of how the extension parses and understands OpenFOAM/

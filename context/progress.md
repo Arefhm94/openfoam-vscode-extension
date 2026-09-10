@@ -791,3 +791,29 @@ one final time — unchanged, 2.03 MB. Lesson: when a fix's claim is "this
 works without X", the only real verification is testing with X actually
 absent, not just re-running the same command in an environment where X
 still happens to be present.
+
+## 2026-09-10 — 0.7.1: `#include` `$FOAM_CASE` expansion (Part A of the post-0.7.0 plan)
+
+User reported a false-positive diagnostic after 0.7.0 shipped:
+`#include "$FOAM_CASE/system/includeDicts/BCs_tracers_zeroGradient"` in
+`examples/Helyx/complex/system/caseSetupDict` flagged "cannot find"
+despite the file existing. Root cause: `resolveInclude()` in
+`caseContext.ts` did zero variable expansion — `$FOAM_CASE` went into
+`path.join` as a literal segment.
+
+Fix: new `expandOpenFoamVars(raw, caseRoot)` in `caseContext.ts` maps
+`$FOAM_CASE`/`${FOAM_CASE}` → the case root that `findCaseRoot()` already
+computes, plus `$FOAM_CASENAME`, `$WM_PROJECT_DIR`, `$FOAM_ETC`, etc. from
+`process.env`; unknown `$VAR`s pass through unchanged. `resolveInclude()`
+now expands first, and checks an absolute expanded path directly before
+the relative candidates. All four call sites (diagnostics, hover,
+go-to-definition, document links) route through this one function, so all
+benefit. New `test/caseContext.test.ts` (11 tests) against the real
+`examples/Helyx/complex` fixture — regression + no-false-match coverage.
+Bumped to 0.7.1, CHANGELOG entry added. `npm run compile/lint/test` clean
+(90 passed / 1 skipped). `.vsix` built.
+
+Part B of the plan (semantic coloring of resolvable references — geometry
+files, `$vars`, patches, includes — via an LSP semantic-tokens provider)
+is deferred to 0.8.0 per the user's chosen delivery split; see
+`/Users/arefmoalemi/.claude/plans/please-familiarize-yourself-with-abundant-spark.md`.

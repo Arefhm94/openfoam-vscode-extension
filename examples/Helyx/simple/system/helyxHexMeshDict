@@ -6,7 +6,8 @@
 |       o          |                                                          |
 \*---------------------------------------------------------------------------*/
 
-FoamFile {
+FoamFile
+{
     version     2.0;
     format      ascii;
     class       dictionary;
@@ -26,7 +27,8 @@ allowTopoChanges     true;
 finalDecomposition   ptscotch;
 meshMode             quality;
 
-geometry {
+geometry
+{
     // refinement boxes
     _ref01.stl      { type triSurfaceMesh;name _ref01     ;appendRegionName false;}
     _ref02.stl      { type triSurfaceMesh;name _ref02     ;appendRegionName false;}
@@ -40,21 +42,29 @@ geometry {
     top.stl         { type triSurfaceMesh;name top        ;appendRegionName false;}
     // detailed
     offsite_bld.stl { type triSurfaceMesh;name offsite_bld;appendRegionName false;}
-    onsite_bld.stl  { type triSurfaceMesh;name onsite_bld ;appendRegionName false;}    
+    onsite_bld.stl  { type triSurfaceMesh;name onsite_bld ;appendRegionName false;}
     source_area.stl { type triSurfaceMesh;name source_area;appendRegionName false;}
-    terrain.stl     { type triSurfaceMesh;name terrain    ;appendRegionName false;}
-    
+    terrain.stl
+    {
+        type    triSurfaceMesh;
+        name    terrain        source_area;
+        appendRegionName false;
+    }
+
+
 }
 
-castellatedMeshControls {
+castellatedMeshControls
+{
     features (
-        { file "offsite_bld.eMesh";           levels ((0.0 7)); refineFeatureEdgesOnly false; }
-        { file "onsite_bld.eMesh";            levels ((0.0 7)); refineFeatureEdgesOnly false; }
-        { file "onsite_bld_intersect.eMesh";  levels ((0.0 7)); refineFeatureEdgesOnly false; }
-        { file "offsite_bld_intersect.eMesh"; levels ((0.0 7)); refineFeatureEdgesOnly false; }
+    { file "offsite_bld.eMesh";           levels ((0.0 7)); refineFeatureEdgesOnly false; }
+    { file "onsite_bld.eMesh";            levels ((0.0 7)); refineFeatureEdgesOnly false; }
+    { file "onsite_bld_intersect.eMesh";  levels ((0.0 7)); refineFeatureEdgesOnly false; }
+    { file "offsite_bld_intersect.eMesh"; levels ((0.0 7)); refineFeatureEdgesOnly false; }
     );
 
-    refinementSurfaces {
+    refinementSurfaces
+    {
         // bbox
         left        { level (0 0); }
         right       { level (0 0); }
@@ -64,10 +74,11 @@ castellatedMeshControls {
         // detailed
         "terrain.*" { level (2 2); }
         offsite_bld { level (7 7); proximityIncrement 1; maxCellsAcrossGap 4; }
-        onsite_bld  { level (6 6); proximityIncrement 1; maxCellsAcrossGap 4; }        
+        onsite_bld  { level (6 6); proximityIncrement 1; maxCellsAcrossGap 4; }
     }
 
-    refinementRegions {
+    refinementRegions
+    {
         // refinement boxes
         _ref01      { mode inside;   levels ((1E15 2)); }
         _ref02      { mode inside;   levels ((1E15 3)); }
@@ -99,7 +110,8 @@ castellatedMeshControls {
     splitCells                 false;
     singleCellGapClosure       false;
 
-    wrapper {
+    wrapper
+    {
         wrap        false;
         volSources  true;
         volDistance 1.0;
@@ -115,7 +127,8 @@ castellatedMeshControls {
     locationsOutsideMesh ( ( 0.0 0.0 -100.0 ) );
 }
 
-snapControls {
+snapControls
+{
     featureEdges            {}
     nOuterIter              1;
     nPreFeatureIter         0;
@@ -143,14 +156,16 @@ snapControls {
     minAcuteReflexSnapAngle 8.0;
 }
 
-addLayersControls {
-    layers {
+addLayersControls
+{
+    layers
+    {
         // bbox patches
         left        { nSurfaceLayers 0; grownUp true; }
         right       { nSurfaceLayers 0; grownUp true; }
         inlet       { nSurfaceLayers 0; grownUp true; }
         outlet      { nSurfaceLayers 0; grownUp true; }
-        
+
         // detailed patches
         top         { nSurfaceLayers 0; expansionRatio 1.25; finalLayerThickness 0.4; grownUp automatic; }
         offsite_bld { nSurfaceLayers 4; expansionRatio 1.25; finalLayerThickness 0.4; grownUp automatic; }
@@ -192,7 +207,8 @@ addLayersControls {
     extrudeBlend              false;
 }
 
-meshQualityControls {
+meshQualityControls
+{
     maxNonOrtho             70.0;
     maxBoundarySkewness     20;
     maxInternalSkewness     6;
@@ -220,9 +236,11 @@ meshQualityControls {
     minEdgeLength           -1.0;
 }
 
-meshOptimization {
+meshOptimization
+{
     type cfMeshOptimize;
-    cfMeshOptimizeCoeffs {
+    cfMeshOptimizeCoeffs
+    {
         qualityThreshold        0.0;
         numLaplaceIterations    0;
         maxNumGlobalIterations  10;
@@ -234,7 +252,8 @@ meshOptimization {
     }
 }
 
-cellRemoval {
+cellRemoval
+{
     checks      ();
     patch       oldInternalFaces;
     removeCells true;

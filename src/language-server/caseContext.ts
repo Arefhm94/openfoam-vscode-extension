@@ -30,15 +30,45 @@ export function findCaseRoot(fileUri: string): string | null {
   return null;
 }
 
+/**
+ * Expands OpenFOAM/HELYX environment-variable references (`$FOAM_CASE`,
+ * `${FOAM_CASE}`, `$FOAM_CASENAME`, `$WM_PROJECT_DIR`, …) that appear in
+ * `#include` paths. `$FOAM_CASE` maps to the case root — exactly what
+ * `findCaseRoot()` already computes. Unknown `$VAR`s are left as-is so
+ * resolution simply fails (as before) rather than misbehaving.
+ */
+export function expandOpenFoamVars(raw: string, caseRoot: string | null): string {
+  const caseName = caseRoot ? path.basename(caseRoot) : undefined;
+  const table: Record<string, string | undefined> = {
+    FOAM_CASE: caseRoot ?? undefined,
+    FOAM_CASENAME: caseName,
+    PWD: caseRoot ?? undefined,
+    WM_PROJECT_DIR: process.env.WM_PROJECT_DIR,
+    WM_PROJECT_USER_DIR: process.env.WM_PROJECT_USER_DIR,
+    FOAM_ETC: process.env.FOAM_ETC,
+    FOAM_SRC: process.env.FOAM_SRC,
+    FOAM_APP: process.env.FOAM_APP,
+    FOAM_RUN: process.env.FOAM_RUN,
+    FOAM_TUTORIALS: process.env.FOAM_TUTORIALS,
+    HOME: process.env.HOME,
+  };
+  return raw.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (m, name) => table[name] ?? m);
+}
+
 export function resolveInclude(
   includePath: string,
   fromUri: string,
   caseRoot: string | null,
 ): string | null {
-  const clean = includePath.replace(/^["<]|[">]$/g, '').trim();
+  const clean = expandOpenFoamVars(
+    includePath.replace(/^["<]|[">]$/g, '').trim(),
+    caseRoot,
+  );
   const fromDir = path.dirname(uriToPath(fromUri));
 
-  const candidates: string[] = [path.join(fromDir, clean)];
+  const candidates: string[] = [];
+  if (path.isAbsolute(clean)) candidates.push(clean);
+  candidates.push(path.join(fromDir, clean));
   if (caseRoot) {
     candidates.push(path.join(caseRoot, 'system', clean));
     candidates.push(path.join(caseRoot, clean));
