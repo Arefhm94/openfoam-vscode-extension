@@ -2,7 +2,56 @@
 
 <img src="logo.png" alt="OpenFOAM Language Support" width="100">
 
-VS Code support for OpenFOAM case files: syntax highlighting, hover docs, completions, an inspector, and quick geometry preview.
+VS Code support for OpenFOAM case files: syntax highlighting, hover docs, completions, diagnostics, a case explorer, and quick geometry preview.
+
+---
+
+## What's New in 0.7.0
+
+This release replaces the extension's parsing engine with
+[tree-sitter](https://tree-sitter.github.io/tree-sitter/), a real parser
+built specifically for OpenFOAM/Helyx dictionary syntax. That change
+unlocked several new features and fixed a number of longstanding bugs:
+
+**New features**
+
+- **Smarter diagnostics**: the extension now catches more real mistakes —
+  unknown keywords, missing required keywords, and invalid values (e.g. an
+  unrecognized `startFrom` option) — for `controlDict`, `blockMeshDict`,
+  `decomposeParDict`, `snappyHexMeshDict`, `helyxHexMeshDict`,
+  `fvSchemes`, `fvSolution`, `turbulenceProperties`, `boundaryField`,
+  `regionProperties`, `phaseProperties`, and `mapFieldsDict`.
+- **Precise syntax-error locations**: a missing semicolon or unbalanced
+  brace is now reported at its exact location in every file type, instead
+  of only a generic whole-file warning.
+- **Smarter boundary-condition completions**: typing a `type` inside a
+  boundary condition now only suggests conditions that are actually valid
+  for that field — editing `U` no longer suggests pressure-only types,
+  and editing `p` no longer suggests velocity-only types.
+- **Helyx `helyxHexMeshDict` keyword support**: Helyx-specific
+  `snappyHexMeshDict` extensions (feature refinement, gap closure,
+  layer/mesh-quality controls, and more) are now recognized instead of
+  being flagged as unknown or missing entirely from completions.
+
+**Bugs fixed**
+
+- Signature help (parameter hints while typing a scheme like
+  `Gauss linearUpwind grad(U)`) previously never actually triggered for
+  the standard single-line entry format — it does now.
+- Hover and completion for several `controlDict`/`blockMeshDict`/
+  `snappyHexMeshDict` keywords were silently broken due to a data-lookup
+  bug; fixed.
+- Dotted and composite identifiers (`alpha.water`, `div(phi,U)`) now
+  resolve correctly everywhere (hover, rename, go-to-definition) instead
+  of being cut off at the first special character.
+- Quoted strings, comments, and multi-line list values are now parsed
+  correctly in every case, including edge cases (braces inside comments
+  or strings) that could previously corrupt parsing of the rest of the
+  file.
+- The packaged extension is roughly 17x smaller than before (no longer
+  accidentally bundling large example case files).
+
+See [CHANGELOG.md](CHANGELOG.md) for the full technical write-up.
 
 ---
 
@@ -65,22 +114,13 @@ Completion suggestions are based on where you are in the file:
 
 Shows the document structure in the Explorer and outline view so it is easier to move through large dictionaries.
 
-### Inspector Panel
+### Case Explorer
 
-A visual view of the current dictionary with blocks, parameters, inline edits, and boolean toggles.
-
-Open with: `Ctrl+Shift+P` → **OpenFOAM: Open Inspector**  
-Or click the `$(file-code) OpenFOAM` status bar item.
-
-The inspector tracks the active editor and highlights the block around your cursor.
+A dedicated OpenFOAM view in the Activity Bar that shows your case directory tree, with quick actions (copy relative path, reveal in Finder, duplicate file, find file in case) available from each item's context menu.
 
 ### Geometry Preview
 
-If a geometry reference points to an STL, OBJ, or VTK file, the inspector can show a 3D preview.
-
-- Opens in the inspector panel, which is intended to stay as a horizontal panel at the bottom
-- Inline thumbnails for geometry references
-- Full viewer with rotate, pan, and zoom
+Right-click an `.stl`, `.obj`, or `.vtk` file (in the Case Explorer or a `geometry { }`/`triSurface` reference) and choose **OpenFOAM: Preview Geometry (3D)** to open an interactive 3D viewer.
 
 Viewer controls:
 
@@ -98,13 +138,18 @@ Files in `system/`, `constant/`, and time directories such as `0/` or `1/` are d
 
 | Command | Description |
 |---------|-------------|
-| `OpenFOAM: Open Inspector` | Open the visual inspector panel |
-| `OpenFOAM: Preview Geometry (3D)` | Open a geometry file in the inspector viewer |
+| `OpenFOAM: Preview Geometry (3D)` | Open a geometry file (STL/OBJ/VTK) in the 3D viewer |
 | `OpenFOAM: Set Language Mode` | Manually apply OpenFOAM language to the active file |
 | `OpenFOAM: Rebuild Keyword Database` | Re-run extraction scripts against an OpenFOAM source tree |
 | `OpenFOAM: Show Scheme Documentation` | Browse scheme docs via quick-pick |
 | `OpenFOAM: Insert Turbulence Block` | Insert a RAS or LES snippet at the cursor |
 | `OpenFOAM: Refresh Keyword Database` | Reload the keyword database from a compiled extractor |
+| `OpenFOAM: Refresh Case Explorer` | Reload the Case Explorer tree |
+| `OpenFOAM: Switch Case Root` | Change which case directory the Case Explorer shows |
+| `OpenFOAM: Find File in Case` | Quick-pick search across the current case |
+| `OpenFOAM: Copy Relative Path` | Copy a case file's path relative to the case root |
+| `OpenFOAM: Reveal in Finder` | Reveal the selected file in Finder/Explorer |
+| `OpenFOAM: Duplicate File` | Duplicate the selected case file |
 
 ---
 
@@ -157,23 +202,28 @@ The extension ships with a pre-built `data/keyword-db.json`. To regenerate it fr
 src/
   extension.ts                       # Extension entry point
   language-server/server.ts          # LSP server (hover, completion, diagnostics)
+  treeSitter/                        # tree-sitter parsing, schema-driven diagnostics
   workflow/GeometryPreviewPanel.ts   # Standalone 3D geometry preview
   providers/
     OpenFOAMDocumentSymbolProvider.ts  # Outline view
     OpenFOAMCodeLensProvider.ts        # Inlay hints / boolean toggles
-  parsers/OpenFOAMParser.ts          # Dictionary parser
-syntaxes/openfoam.tmLanguage.json    # TextMate grammar
+    OpenFOAMCaseTreeProvider.ts        # Case Explorer
+syntaxes/openfoam.tmLanguage.json    # TextMate grammar (editor syntax highlighting)
 data/keyword-db.json                 # Keyword database
 scripts/                             # Python extraction scripts (01–13)
-examples/                            # Example OpenFOAM cases
+examples/                            # Example OpenFOAM cases (dev/test only, not packaged)
 ```
+
+Parsing itself lives in a separate [tree-sitter](https://tree-sitter.github.io/tree-sitter/)
+grammar package, `tree-sitter-openfoam`, consumed via `web-tree-sitter`.
 
 ---
 
 ## Notes
 
-- The inspector is built as a webview panel, so final placement still depends on the current VS Code layout.
+- The geometry viewer is built as a webview panel, so final placement still depends on the current VS Code layout.
 - Geometry preview currently focuses on STL-based workflows and common case-relative geometry paths.
+- Deep keyword-level diagnostics currently cover the file types listed under "What's New" above; other file types still get syntax highlighting, hover, outline, and parse-error diagnostics, just not unknown-keyword/missing-required-keyword checks yet.
 
 ---
 

@@ -4,7 +4,7 @@ All notable changes to the OpenFOAM Dictionary Support extension are
 documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] — tree-sitter overhaul
+## [0.7.0] — 2026-09-10 — tree-sitter overhaul
 
 A ground-up rework of how the extension parses and understands OpenFOAM/
 Helyx dictionary files, executed in phases per
