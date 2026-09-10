@@ -14,6 +14,10 @@ import {
   executeToggleBoolean,
 } from "./providers/OpenFOAMCodeLensProvider";
 import { OpenFOAMCaseTreeProvider, CaseItem } from "./providers/OpenFOAMCaseTreeProvider";
+import { runSearchInsert } from "./scaffold/engine";
+import { registerStagingTab } from "./scaffold/stagingTab";
+import { registerInlineScaffold } from "./scaffold/inlineComplete";
+import { registerDocsHelp } from "./docs/register";
 
 let client: LanguageClient;
 
@@ -127,6 +131,19 @@ export function activate(context: vscode.ExtensionContext) {
       if (sel) vscode.window.showInformationMessage(`${sel.label} (${sel.description}): ${sel.detail}`);
     },
   );
+
+  // Search & Configure. Primary entry point is the `?` inline trigger
+  // (see registerInlineScaffold). This command is the keyboard / palette
+  // path for choosing a different target or editing before writing.
+  const searchInsertCommand = vscode.commands.registerCommand(
+    "openfoam.searchInsert",
+    async (arg?: { category?: string; featureId?: string }) => {
+      await runSearchInsert(context, arg);
+    },
+  );
+  registerStagingTab(context);
+  registerInlineScaffold(context);
+  registerDocsHelp(context);
 
   // Insert turbulence model block snippet
   const insertTurbCommand = vscode.commands.registerCommand(
@@ -389,6 +406,7 @@ export function activate(context: vscode.ExtensionContext) {
     setLanguageCommand,
     rebuildDbCommand,
     showSchemeDocCommand,
+    searchInsertCommand,
     insertTurbCommand,
     documentSymbolProvider,
     inlayHintsProvider,

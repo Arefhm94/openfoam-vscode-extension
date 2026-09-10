@@ -6,11 +6,12 @@ import {
   Range, Position, Location, Definition, DocumentLink, DocumentLinkParams,
   CodeAction, CodeActionKind, CodeActionParams, TextEdit, WorkspaceEdit,
   RenameParams, DocumentFormattingParams,
+  SemanticTokens, SemanticTokensParams, SemanticTokensBuilder,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as path from "path";
-import { findCaseRoot, resolveInclude, resolveVariable, uriToPath, collectVariables } from './caseContext';
+import { findCaseRoot, resolveInclude, resolveVariable, uriToPath, collectVariables, getCaseVariableNames } from './caseContext';
 import {
   scanCaseGeometry, getSurfaceNames,
   getBoundaryPatchNames, getSTLRegionsForSurface,
@@ -25,6 +26,9 @@ import {
   isInsideComment as tsIsInsideComment,
   signatureHelpContext as tsSignatureHelpContext,
 } from '../treeSitter/queries';
+import { SEMANTIC_TOKEN_TYPES, computeSemanticTokens } from '../treeSitter/semanticTokens';
+
+const SEMANTIC_TOKENS_LEGEND = { tokenTypes: SEMANTIC_TOKEN_TYPES as unknown as string[], tokenModifiers: [] as string[] };
 import {
   validate as schemaValidate,
   validateBlock as schemaValidateBlock,
@@ -781,6 +785,7 @@ class OpenFOAMLanguageServer {
     this.conn.onCodeAction(this.onCodeAction.bind(this));
     this.conn.onDocumentFormatting(this.onDocumentFormatting.bind(this));
     this.conn.onRenameRequest(this.onRename.bind(this));
+    this.conn.languages.semanticTokens.on(this.onSemanticTokens.bind(this));
     this.docs.onDidChangeContent(e => { this.parseDoc(e.document); this.scheduleDiagnostics(e.document); });
     this.docs.onDidOpen(e => { this.parseDoc(e.document); this.scheduleDiagnostics(e.document); });
     this.docs.onDidClose(e => this.trees.delete(e.document.uri));
@@ -811,6 +816,45 @@ class OpenFOAMLanguageServer {
 
   listen() { this.docs.listen(this.conn); this.conn.listen(); }
 
+  // ── Semantic tokens ──────────────────────────────────────────────────────
+  /**
+   * Emits a semantic token only for values that resolve to something real in
+   * the case (a geometry file in `constant/triSurface`, a `.eMesh`, a
+   * `$variable` with a definition, a boundary patch in `polyMesh/boundary`,
+   * a resolvable `#include` path). Everything else gets no token and keeps
+   * its TextMate / default colour. Resolver lookups are gathered once per
+   * request, not per token.
+   */
+  private onSemanticTokens(params: SemanticTokensParams): SemanticTokens {
+    const builder = new SemanticTokensBuilder();
+    const doc = this.docs.get(params.textDocument.uri);
+    if (!doc) return builder.build();
+    const tree = this.getTree(doc);
+    if (!tree) return builder.build();
+
+    const caseRoot = findCaseRoot(doc.uri);
+    const surfaceNames = new Set<string>();
+    const surfaceFilenames = new Set<string>();
+    const eMeshNames = new Set<string>();
+    const patchNames = new Set<string>();
+    const varNames = new Set<string>();
+    if (caseRoot) {
+      const geo = scanCaseGeometry(caseRoot);
+      for (const s of geo.surfaces) { surfaceNames.add(s.name); surfaceFilenames.add(s.filename); }
+      for (const m of geo.featureEdgeMeshes) eMeshNames.add(m);
+      for (const p of geo.boundaryPatches) patchNames.add(p);
+      for (const n of getCaseVariableNames(caseRoot)) varNames.add(n);
+    }
+    for (const v of collectVariables(doc.getText(), doc.uri)) varNames.add(v.name);
+
+    const tokens = computeSemanticTokens(tree, {
+      surfaceNames, surfaceFilenames, eMeshNames, patchNames, varNames,
+      includeResolves: raw => resolveInclude(raw, doc.uri, caseRoot) != null,
+    });
+    for (const t of tokens) builder.push(t.line, t.char, t.length, t.tokenType, 0);
+    return builder.build();
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   private onInit(_p: InitializeParams): InitializeResult {
     return {
@@ -824,6 +868,11 @@ class OpenFOAMLanguageServer {
         codeActionProvider: true,
         documentFormattingProvider: true,
         renameProvider: true,
+        semanticTokensProvider: {
+          legend: SEMANTIC_TOKENS_LEGEND,
+          full: true,
+          range: false,
+        },
       },
     };
   }

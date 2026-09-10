@@ -85,9 +85,6 @@
       "include": "#general-keywords"
     },
     {
-      "include": "#variable-refs"
-    },
-    {
       "include": "#blocks"
     },
     {
@@ -266,18 +263,6 @@
     "function-object-types": {
       "name": "support.function.functionObject.openfoam",
       "match": "\\b(forces|forceCoeffs|fieldAverage|probes|surfaces|residuals|streamlines|wallShearStress|yPlus|turbulenceFields|MachNumber|vorticity|Q|Lambda2|writeObjects|singleGraph|graphUniform|patchProbes|fieldMinMax|volFieldValue|surfaceFieldValue|cellSource|patchSource|ensightWrite|isoSurface|cuttingPlane|sampledSurfaces|sampledSets|streamFunction|pressureTools|PecletNo|CourantNo|timeActivatedFileUpdate|setFlow|systemCall|abort|coded|externalCoupled|columnAverage|randomise|reattachmentLength|momentumError|nearWallFields|readFields|boundaryProbes|dsmcFields|XiReactionRate|Qdot|heatTransfer|interfaceHeight|phaseForces|phaseScalarTransport|fluidPhase|mapFields|patchAverage|globalMinMax|minMaxMagnitude|checkMeshQuality)\\b"
-    },
-    "variable-refs": {
-      "patterns": [
-        {
-          "name": "variable.other.openfoam",
-          "match": "\\$\\{[^}]+\\}"
-        },
-        {
-          "name": "variable.other.openfoam",
-          "match": "\\$:?[A-Za-z_][A-Za-z0-9_]*"
-        }
-      ]
     },
     "blocks": {
       "patterns": [

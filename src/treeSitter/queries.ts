@@ -265,3 +265,32 @@ export function signatureHelpContext(tree: Tree, pos: Point): SignatureHelpConte
 
   return { schemeName, activeParameter: Math.max(0, lastStarted - 1) };
 }
+
+/**
+ * Visits every "token-shaped" node in the tree — `identifier` (whole span,
+ * including a `call_key` like `div(phi,U)`), `string`, `dollar_reference`,
+ * plus `include_directive` (so the caller can classify the include path via
+ * its `path` field). Does not descend into a visited node. Used by the
+ * semantic-tokens provider. Visit order is not guaranteed to be document
+ * order — callers that need ordering (the LSP `SemanticTokensBuilder`
+ * does) must sort.
+ */
+export function forEachToken(tree: Tree, visit: (node: SyntaxNode) => void): void {
+  const stack: SyntaxNode[] = [tree.rootNode];
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (
+      node.type === "identifier" ||
+      node.type === "string" ||
+      node.type === "dollar_reference" ||
+      node.type === "include_directive"
+    ) {
+      visit(node);
+      continue;
+    }
+    for (let i = node.namedChildCount - 1; i >= 0; i--) {
+      const c = node.namedChild(i);
+      if (c) stack.push(c);
+    }
+  }
+}

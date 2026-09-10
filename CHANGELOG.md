@@ -4,6 +4,70 @@ All notable changes to the OpenFOAM Dictionary Support extension are
 documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.3] — 2026-09-10
+
+### Added
+
+- **Search & Configure — `@` inline trigger.** Type `@` (optionally with
+  a query, e.g. `@pimple`, `@fixed`) where a dictionary key or block name
+  would go and the completion popup fills with scaffoldable features
+  ranked for the current file — boundary conditions in a `0/` field
+  file, SIMPLE/PIMPLE/PISO in `fvSolution`, RAS/LES models in a
+  turbulence-properties file, and so on. Accepting one replaces the `@`
+  with the block right there, as a snippet, so the parameters are
+  tab-stops you fill in place (a boundary condition typed inside
+  `boundaryField` expands to a whole `patch { … }` entry). No dialog.
+  - This release covers boundary conditions and fvSolution algorithms
+    with a full field draft, plus turbulence models and schemes as a
+    searchable starting-point insert. Function objects and fvOptions are
+    pending richer schema data.
+- **`?` — OpenFOAM C++ API help.** Type `?name` where a value would go
+  (e.g. `?kOmegaSST`, `?fixedValue`) and the completion popup lists
+  matching classes from cpp.openfoam.org. As you move through the list
+  the detail pane beside the cursor shows that class's brief and — with
+  `openfoam.docs.onlineHelp` enabled — its full *Detailed Description*,
+  fetched from the class page and rendered inline. **Pressing Enter**
+  opens the class documentation in a persistent panel beside the editor
+  (`openfoam.docs.onAccept`, default `panel`; also `browser` — the page
+  in VS Code's Simple Browser — `comment` — a `//` note with the brief
+  and URL — or `none`). Separately, **hover any identifier** that names
+  an OpenFOAM class for the same brief + full description + link. A class
+  index is bundled with the extension so the briefs and links work
+  offline; `openfoam.docs.onlineHelp` (default `false`) opts into all
+  cpp.openfoam.org traffic — the index refresh and the on-demand page
+  fetches, both cached ~7 days — and `openfoam.docs.apiVersion` (default
+  `v14`) picks the docs version.
+- **Staging tab** (opt-in via `openfoam.scaffold.insertMode: "stagingTab"`,
+  or the `OpenFOAM: Search & Configure` command / `Ctrl+Alt+O` ·
+  `Cmd+Alt+O`). Instead of dropping the block at the cursor, opens it in
+  a real, editable OpenFOAM buffer with full highlighting, completion and
+  diagnostics, and three buttons at the top of the tab — **Write →
+  `<target>`** (suggested destination file + block nesting), **Change
+  target** (autocompleting picker over the case's dictionary files;
+  append `> block > block` to change the nesting), **Discard**. Nothing
+  touches disk until Write, which creates the enclosing block — and the
+  file, with a standard header — if needed.
+
+## [0.7.2] — 2026-09-10
+
+### Added
+
+- **Semantic highlighting for resolvable references.** Values that point
+  at something real in the case now get a distinct colour, by category:
+  a geometry file (`.stl`/`.obj`/…) present in `constant/triSurface/`, a
+  `.eMesh` feature-edge file, a `$variable` that resolves to a definition
+  in the case, a boundary-patch name that exists in
+  `constant/polyMesh/boundary`, and an `#include` path that resolves to
+  an existing file. Anything that resolves to nothing gets no colour and
+  stays at the editor default — so a typo in a geometry name or a stale
+  `$ref` now visibly stands out from a correct one. Colours follow the
+  active theme (mapped to its type / variable / tag / string / function
+  colours); requires semantic highlighting enabled in the theme (on by
+  default in most).
+- The `$variable` TextMate rule was removed so unresolved `$refs` are no
+  longer coloured unconditionally — the semantic layer is now the single
+  source of truth for `$ref` colouring.
+
 ## [0.7.1] — 2026-09-10
 
 ### Fixed

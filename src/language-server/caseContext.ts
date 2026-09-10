@@ -113,6 +113,41 @@ export function collectVariables(text: string, uri: string): VarDef[] {
   return vars;
 }
 
+const caseVarNamesCache = new Map<string, { sig: number; names: Set<string> }>();
+
+/**
+ * The set of all top-level variable names defined across `<caseRoot>/system/*`.
+ * Cached per case root, keyed by an XOR of the system/ files' mtimes.
+ * Used by the semantic-tokens provider to colour resolvable `$refs`.
+ */
+export function getCaseVariableNames(caseRoot: string): Set<string> {
+  const sysDir = path.join(caseRoot, 'system');
+  let files: string[];
+  try {
+    files = fs.readdirSync(sysDir).map(e => path.join(sysDir, e));
+  } catch {
+    return new Set();
+  }
+  let sig = 0;
+  for (const f of files) {
+    try { sig ^= Math.floor(fs.statSync(f).mtimeMs); } catch { /* skip */ }
+  }
+  const cached = caseVarNamesCache.get(caseRoot);
+  if (cached && cached.sig === sig) return cached.names;
+
+  const names = new Set<string>();
+  for (const f of files) {
+    try {
+      if (!fs.statSync(f).isFile()) continue;
+      for (const v of collectVariables(fs.readFileSync(f, 'utf-8'), 'file://' + f)) {
+        names.add(v.name);
+      }
+    } catch { /* skip */ }
+  }
+  caseVarNamesCache.set(caseRoot, { sig, names });
+  return names;
+}
+
 export function resolveVariable(
   name: string,
   fromUri: string,

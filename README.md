@@ -6,9 +6,56 @@ VS Code support for OpenFOAM case files: syntax highlighting, hover docs, comple
 
 ---
 
-## What's New in 0.7.0
+## What's New
 
-This release replaces the extension's parsing engine with
+### 0.7.3
+
+- **Search & Configure — `@` inline trigger.** Type `@` (or `@pimple`,
+  `@fixed`, …) where a key or block name would go — the completion popup
+  fills with scaffoldable features ranked for the current file, and
+  accepting one drops the block in as a snippet right where you typed,
+  with the parameters as tab-stops. Covers boundary conditions and the
+  SIMPLE/PIMPLE/PISO blocks with a full field draft, plus turbulence
+  models and schemes as a searchable starting-point insert.
+- **`?` — OpenFOAM C++ API help.** Type `?name` (e.g. `?kOmegaSST`,
+  `?fixedValue`) to search cpp.openfoam.org's class list — the detail
+  pane shows each match's brief, and with `openfoam.docs.onlineHelp` on,
+  the class page's full *Detailed Description* rendered inline. Enter
+  opens the docs in a persistent panel beside the editor
+  (`openfoam.docs.onAccept`: `panel` default, or `browser` / `comment` /
+  `none`). Hovering an identifier that names an OpenFOAM class shows the
+  brief + description inline. Ships with a bundled
+  class index (briefs + links work offline); `openfoam.docs.onlineHelp`
+  opts into all cpp.openfoam.org traffic (index refresh + page fetches,
+  cached ~7 days), `openfoam.docs.apiVersion` picks the version.
+- **Staging tab.** Set `openfoam.scaffold.insertMode` to `"stagingTab"`,
+  or run `OpenFOAM: Search & Configure` (`Ctrl+Alt+O` / `Cmd+Alt+O`), to
+  open the block in an editable buffer instead — full highlighting and
+  diagnostics while you edit, with **Write → `<target>`**, **Change
+  target** (autocompletes over the case's dictionary files; add
+  `> block` to change nesting) and **Discard** buttons. Nothing is
+  written until Write, which creates the enclosing block (and the file)
+  if needed.
+
+### 0.7.2
+
+- **Semantic highlighting for resolvable references.** Values that point
+  at something real in the case get a distinct, theme-aware colour by
+  category — a geometry file in `constant/triSurface/`, a `.eMesh`, a
+  `$variable` with a definition, a boundary patch in
+  `constant/polyMesh/boundary`, a resolvable `#include` path. Names that
+  resolve to nothing stay the default colour, so typos and stale
+  references visibly stand out.
+
+### 0.7.1
+
+- Fixed a false-positive *"#include: cannot find"* error on paths using
+  `$FOAM_CASE` (and other standard OpenFOAM variables) — common in HELYX
+  cases with a `system/includeDicts/` convention.
+
+### 0.7.0 — tree-sitter overhaul
+
+This release replaced the extension's parsing engine with
 [tree-sitter](https://tree-sitter.github.io/tree-sitter/), a real parser
 built specifically for OpenFOAM/Helyx dictionary syntax. That change
 unlocked several new features and fixed a number of longstanding bugs:
@@ -70,6 +117,8 @@ Understands the main OpenFOAM dictionary patterns and highlights them clearly:
 - Decomposition methods: `scotch`, `simple`, `hierarchical`, …
 - Dimension sets `[kg m s K mol A cd]`, vectors `(x y z)`, numbers, booleans
 - `$variable` references and `#include` directives
+
+On top of that, **semantic highlighting** gives a distinct colour to values that resolve to something real — a geometry file in `constant/triSurface/`, a `$variable` with a definition, a boundary patch in `constant/polyMesh/boundary`, a resolvable `#include` — so a typo stands out from a correct reference.
 
 ### Hover Documentation
 
@@ -138,6 +187,7 @@ Files in `system/`, `constant/`, and time directories such as `0/` or `1/` are d
 
 | Command | Description |
 |---------|-------------|
+| `OpenFOAM: Search & Configure (Insert Block)` | Open the staging tab: pick a feature, edit the draft block, choose a target, Write (also on `Ctrl+Alt+O` / `Cmd+Alt+O`; the `?` inline trigger is the quicker path) |
 | `OpenFOAM: Preview Geometry (3D)` | Open a geometry file (STL/OBJ/VTK) in the 3D viewer |
 | `OpenFOAM: Set Language Mode` | Manually apply OpenFOAM language to the active file |
 | `OpenFOAM: Rebuild Keyword Database` | Re-run extraction scripts against an OpenFOAM source tree |
@@ -202,7 +252,9 @@ The extension ships with a pre-built `data/keyword-db.json`. To regenerate it fr
 src/
   extension.ts                       # Extension entry point
   language-server/server.ts          # LSP server (hover, completion, diagnostics)
-  treeSitter/                        # tree-sitter parsing, schema-driven diagnostics
+  treeSitter/                        # tree-sitter parsing, schema-driven diagnostics, semantic tokens
+  scaffold/                          # "Search & Configure" `@` insert engine
+  docs/                              # `?` cpp.openfoam.org lookup + hover
   workflow/GeometryPreviewPanel.ts   # Standalone 3D geometry preview
   providers/
     OpenFOAMDocumentSymbolProvider.ts  # Outline view
@@ -210,6 +262,7 @@ src/
     OpenFOAMCaseTreeProvider.ts        # Case Explorer
 syntaxes/openfoam.tmLanguage.json    # TextMate grammar (editor syntax highlighting)
 data/keyword-db.json                 # Keyword database
+data/openfoam-classes.json           # Bundled cpp.openfoam.org class index (scripts/build-doc-index.js)
 scripts/                             # Python extraction scripts (01–13)
 examples/                            # Example OpenFOAM cases (dev/test only, not packaged)
 ```

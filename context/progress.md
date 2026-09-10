@@ -817,3 +817,421 @@ Part B of the plan (semantic coloring of resolvable references — geometry
 files, `$vars`, patches, includes — via an LSP semantic-tokens provider)
 is deferred to 0.8.0 per the user's chosen delivery split; see
 `/Users/arefmoalemi/.claude/plans/please-familiarize-yourself-with-abundant-spark.md`.
+
+## 2026-09-10 — 0.7.2: semantic coloring of resolvable references (Part B)
+
+User later asked for all three follow-ups to ship as 0.7.x patches
+(0.7.2 = coloring, 0.7.3 = scaffold engine).
+
+**Implemented as an LSP semantic-tokens provider.** `onSemanticTokens` in
+`server.ts` walks the cached tree, gathers the case's surface / eMesh /
+patch / variable name sets **once per request** (reusing
+`scanCaseGeometry`'s mtime cache, plus a new `getCaseVariableNames()` in
+`caseContext.ts` cached by an XOR of `system/` file mtimes), and emits a
+token only where a name resolves. The classification is a pure function,
+`computeSemanticTokens(tree, ctx)` in the new
+`src/treeSitter/semanticTokens.ts`, so it's unit-testable without a live
+connection; `forEachToken(tree, cb)` (new, in `queries.ts`) is the
+token walk. Five custom token types: `geometryFile`, `featureEdge`,
+`caseVariable`, `boundaryPatch`, `includePath`.
+
+**Theming:** `package.json` `contributes.semanticTokenTypes` +
+`contributes.semanticTokenScopes` map each type to a standard TextMate
+scope (`entity.name.type` / `entity.name.function` / `variable` /
+`entity.name.tag` / `string`), so every theme colours them from its own
+palette — no `configurationDefaults` colour overrides needed. Removed the
+`#variable-refs` rule from `openfoam.tmLanguage.json` so unresolved
+`$refs` are no longer coloured unconditionally (the semantic layer now
+owns `$ref` colouring; unresolved ⇒ no token ⇒ default colour). Left the
+`string.quoted.double.include.openfoam` rule in place (low stakes).
+
+**Not done:** manual Extension Development Host check of the actual
+editor colours (no GUI here) — verified via `test/semanticTokens.test.ts`
+(9 tests) exercising `computeSemanticTokens` against hand-built resolver
+contexts plus one integration check against the real
+`examples/Helyx/complex` geometry block. `npm run compile/lint/test`
+clean (99 passed / 1 skipped). Version bumped to 0.7.2, CHANGELOG +
+README "What's New" updated.
+
+**Next:** 0.7.3 — Search & Configure scaffold engine (Part C).
+
+## 2026-09-10 — 0.7.3: Search & Configure scaffold engine (Part C)
+
+Data-driven insert engine, all extension-host side under `src/scaffold/`:
+
+- `features.ts` — `InsertableFeature` descriptor, `normalizeFields()`
+  (flattens the DB's several FieldSpec shapes), `renderBody()` (assembles
+  the `key value;` lines; `type <name>;` first for BCs).
+- `providers.ts` — `collectFeatures(db, opts)`. v1 categories:
+  **boundary conditions** and **fvSolution algorithms** (SIMPLE/PIMPLE/
+  PISO/FLUID) get the full prompt flow (real typed `required` data);
+  **turbulence models** (a small hand-authored RAS/LES template set —
+  supersedes the old hardcoded `openfoam.insertTurbulenceBlock`) and
+  **schemes** (catalog over `db.schemes`, inserts the `usage` example or a
+  `<name>;` stub) are catalog-only. Function objects / fvOptions
+  deliberately excluded — no usable schema data (function objects have
+  zero briefs and untyped `{required:true}` scrape noise; there is no
+  `fvOptions` section). They light up automatically when a data PR adds
+  real schema — no engine change (the point of the architecture).
+- `blockLocator.ts` — `locateInsertion(tree, docText, blockPath)`. Reuses
+  `getParser()` + `buildOutline()` (same modules the server uses; loads
+  its own WASM copy in the extension-host process — proven to work by the
+  vitest suite). Walks `blockPath` down the outline, finds the insert
+  point just before the matched block's `}`, and synthesizes wrapper
+  blocks (correctly indented) for any missing path segment; `blockPath:
+  []` appends at top level before a trailing `// **** //` footer.
+  **Deviation from the plan:** no LSP custom request
+  (`openfoam/resolveScaffoldContext`) — the plan's justification for it
+  ("reused by Part B") evaporated once Part B shipped as a standard
+  semantic-tokens capability, and host-side `getParser` is simpler with
+  no async server dependency. If a future feature genuinely needs
+  server-side tree queries from the host, that's when to add it.
+- `engine.ts` — `runSearchInsert(context, arg?)`: the pipeline.
+  `createQuickPick` (context-ranked: BC-file → boundary conditions first,
+  `fvSolution` → algorithms first, etc., nothing hidden; `{category}`
+  arg restricts outright). Per-field `createInputBox` with live
+  `validateInput` (integer/scalar/boolean/enum), `default` pre-fill, or a
+  `createQuickPick` for enum options. `namedBlock` targets (BCs) prompt
+  for a patch name, offering existing patches from
+  `constant/polyMesh/boundary`. Modal preview (`showInformationMessage`
+  with the rendered block as `detail`) + **Write** / **Change target…**.
+  Write only on confirm: `WorkspaceEdit` insert (creating the file from a
+  minimal FoamFile header if it doesn't exist), then open + reveal.
+  `setStatusBarMessage` confirmation — no modal on success.
+
+- `extension.ts` — `openfoam.searchInsert` command + a `▽ OpenFOAM`
+  status-bar item (shown only for `openfoam` documents), `command` bound
+  to it. `package.json` — command declaration; **no keybinding** (per the
+  spec's own caution about not colliding with defaults — users bind it
+  themselves).
+
+**Verification:** `test/scaffold.test.ts` (14 tests) — `normalizeFields`
+across shapes; `collectFeatures` (BC `typeKeyword` + required-only
+fields + `appliesTo` filter; PIMPLE required fields + target;
+turbulence catalog body; category filter); `renderBody`; and
+`locateInsertion` (insert into existing block, create missing nested
+path, create-whole-path-at-footer, empty-path append). `npm run
+compile/lint/test` clean (113 passed / 1 skipped). Version 0.7.3,
+CHANGELOG + README updated. `.vsix` built (2.05 MB).
+
+**Not done:** manual Extension Development Host walkthrough of the actual
+quick-pick / webview-form UX (no GUI here) — the engine's pure pieces
+(`collectFeatures`, `renderBody`, `locateInsertion`) are unit-tested;
+the VSCode-API orchestration in `engine.ts` / `formPanel.ts`
+(`createQuickPick` wiring, the webview form + live preview message
+round-trip, `WorkspaceEdit` application) is not, and should get a manual
+smoke pass before relying on it.
+
+### 2026-09-10 — 0.7.3 UX revision: staging tab + title-bar icon
+
+Three rounds of user feedback converged on a **staging tab**:
+
+1. "floating card / temp tab instead of the bar" → a `WebviewPanel` form
+   (`formPanel.ts`) — rejected next.
+2. "we really don't need a UI, everything in text mode as OpenFOAM/HELYX
+   uses by default" → direct snippet insert — rejected next.
+3. "when a search item is clicked a new tmp tab opens that the user can
+   edit the text/settings directly, then a Write button; the correct
+   target suggestion is shown but the user must be able to edit the
+   path" → the final design.
+
+Final shape:
+
+- **`src/scaffold/stagingTab.ts`** (new) — `openStagingTab()` opens an
+  **untitled `openfoam` document** pre-filled with `renderTemplate(feature)`
+  (so it's a real editor: highlighting, completion, diagnostics all
+  live). A module-level `Map<uriString, PendingWrite>` holds
+  `{ targetFsPath, caseRoot, blockPath, label }` for each open staging
+  doc. `ScaffoldCodeLensProvider` renders three CodeLens "buttons" at
+  line 0 for those docs only: **Write to `<caseRel › block › block>`**,
+  **Change target…** (input box, `system/fvSolution > PIMPLE` syntax,
+  parsed back to `{file, blockPath}`), **Discard**. `scaffoldWrite`
+  reads the buffer text, creates the target file with a `FoamFile`
+  header if missing, `locateInsertion` for the block path,
+  `WorkspaceEdit.insert`, saves, closes the staging tab via
+  `workbench.action.revertAndCloseActiveEditor` (no save prompt), then
+  reveals the write site. `onDidCloseTextDocument` clears the map entry.
+  `registerStagingTab(context)` wires the provider + 3 commands.
+- **`features.ts`** — `renderSnippetBody` replaced by `renderTemplate(feature)`:
+  plain text, one `key value;` line per required field, seeded from
+  `default` → first enum option → `<type>` placeholder; catalog body
+  verbatim. `renderBody` (used by the diagnostics-free path and tests)
+  unchanged.
+- **`engine.ts`** — flow is now QuickPick (feature search) → for a
+  `namedBlock` target one `pickOrType` QuickPick for the patch name
+  (structural, keeps the polyMesh/boundary suggestions) →
+  `openStagingTab(...)`. All the disk-write / parser / `locateInsertion`
+  logic moved to `stagingTab.ts`; `formPanel.ts` deleted.
+- **`extension.ts`** — `registerStagingTab(context)` after the
+  `searchInsert` command.
+- **`package.json`** — `editor/title` menu entry for `openfoam.searchInsert`
+  (`when: resourceLangId == openfoam`) so the `▽` icon shows top-right
+  of every OpenFOAM editor (status-bar item kept too); the 3
+  `openfoam.scaffold.*` commands declared and hidden from the palette
+  (`commandPalette` `when: false`).
+
+**Follow-up tweaks (same day):**
+
+- **Change target now autocompletes.** `scaffoldChangeTarget` swapped
+  `showInputBox` for a `QuickPick` whose items are every plausible
+  dictionary file in the case (`listCaseDictFiles` — recursive walk,
+  skips `polyMesh`/`triSurface`/`postProcessing`/`processor*` and
+  binary-ish extensions, capped at 800). `qp.value` seeds with the
+  current relative file so typing filters live; picking an item keeps
+  the existing `blockPath`, typing `foo > A > B` overrides the nesting.
+- **Buttons made prominent.** The three actions are now also
+  `editor/title` menu items (`$(check)` / `$(edit)` / `$(trash)`,
+  `group: navigation@1..3`), gated by a `openfoam.stagingTab` context
+  key that `updateStagingContext()` sets on active-editor change / tab
+  open / close — so they sit as always-visible icons at the top-right of
+  the staging tab. `openfoam.searchInsert`'s own title-bar icon is
+  suppressed there (`when: … && !openfoam.stagingTab`). CodeLens titles
+  punched up to `$(check)  WRITE  →  <target>` etc. Command handlers
+  take `Uri | undefined` and `resolveStagingUri()` falls back to the
+  active editor when the menu passes something else.
+
+**`??` inline trigger + keybinding + insertMode setting:**
+
+- **`src/scaffold/context.ts`** (new) — extracted the shared doc-analysis
+  from `engine.ts`: `findCaseRoot`, `detectFieldValueType`,
+  `isBoundaryFieldDoc`, `loadKeywordDb` (cached), and
+  `collectRankedForDoc(db, doc, category?)` (collect + context-rank, used
+  by both the QuickPick engine and the inline completion so they never
+  drift). `engine.ts` now imports these; `runSearchInsert` also accepts
+  `{ featureId }` to skip the picker when called from a completion item.
+- **`features.ts`** — `renderSnippet(feature)` added back alongside
+  `renderTemplate`: `${1:…}` / `${n|a,b,c|}` tab-stops, and for a
+  `namedBlock` target it wraps the body in `${n:name}\n{\n … \n}` so a BC
+  typed inside `boundaryField` becomes a whole patch entry.
+- **`src/scaffold/inlineComplete.ts`** (new) — `InlineScaffoldProvider`,
+  a `CompletionItemProvider` on trigger char `?`. Fires when the line
+  prefix matches `(^|[\s{(])\?\?([\w:]*)$` (and isn't in a `//`
+  comment); returns `collectRankedForDoc(...)` as `Snippet`-kind items
+  with `filterText: "??"+label`, `range` covering the `??`+query. In
+  `insertMode: "inline"` (default) `insertText` is
+  `new SnippetString(renderSnippet(f))`; in `"stagingTab"` it clears the
+  `??` and runs `openfoam.searchInsert` with `{ featureId }`.
+- **`extension.ts`** — `registerInlineScaffold(context)`.
+- **`package.json`** — `openfoam.scaffold.insertMode` enum setting
+  (`inline` default / `stagingTab`); `keybindings` entry binding
+  `openfoam.searchInsert` to `ctrl+alt+o` / `cmd+alt+o` when
+  `editorLangId == openfoam`.
+
+**Verification:** `test/scaffold.test.ts` — +3 `renderSnippet` cases
+(namedBlock `${n:name}{ }` wrap, entries numbering, enum `${n|…|}`).
+`npm run compile / lint / test` clean — **120 passed / 1 skipped**.
+
+### 2026-09-10 — 0.7.3: `?` trigger, dropped the top chrome
+
+User feedback: "maybe just use 1 `?`" and "delete the nabla icon and
+search bar feature on top — the `?` option is way nicer and more useful".
+
+- **Single `?`.** `inlineComplete.ts` regex is now
+  `/(?:^\s*|[{}]\s*)\?([\w:]*)$/` — a lone `?` at the start of a line
+  (after indentation) or right after a brace, plus an optional query.
+  Added a guard: bail if the line prefix has an odd number of `"`
+  (inside a `#calc "…"` / regex-selector string) or contains `//`.
+  `filterText` / replace range / docs updated `??` → `?`.
+- **Removed the always-visible entry points.** Deleted the
+  `editor/title` `openfoam.searchInsert` menu entry (the `▽` icon) and
+  the `▽ OpenFOAM` status-bar item + its `onDidChangeActiveTextEditor`
+  wiring in `extension.ts`. The `openfoam.searchInsert` command itself
+  stays — reachable from the command palette and `Ctrl+Alt+O` /
+  `Cmd+Alt+O`, and used as the `insertMode: "stagingTab"` target — so the
+  staging tab (with its Write / Change target / Discard title-bar
+  buttons, which are unaffected) is still available, just not pushed in
+  the user's face. `?` is now the primary path.
+
+`npm run compile / lint / test` clean — **120 passed / 1 skipped**.
+CHANGELOG + README 0.7.3 entries reworked (still unreleased). Not
+smoke-tested in an Extension Development Host (no GUI here): the `?`
+popup + string/comment guards, the `insertMode` branch, the keybinding,
+and the staging-tab round-trip.
+
+### 2026-09-10 — 0.7.3 Part D: `@` scaffold + `?` cpp.openfoam.org help
+
+User: "symbol `@` is for search items, symbol `?` is for search in
+cpp.openfoam.org — we don't want any `@?` together." Two independent
+single-char triggers. Docs help shows **on hover** over an identifier;
+index sourced **both** ways (bundled + opt-in online); picking a `?`
+result **does nothing** (lookup, not edit). See plan Part D.
+
+- **`src/scaffold/inlineComplete.ts`** — trigger `?` → `@` (regex,
+  `registerCompletionItemProvider(..., "@")`, `filterText`, offsets,
+  doc). Nothing else in `scaffold/` changed.
+- **`src/docs/parse.ts`** (new, no `vscode` — unit-testable):
+  `DocEntry`, `apiRoot`, `decodeEntities`, `parseAnnotated` (class list
+  *with* briefs), `parseClassIndex` (full alphabetical list, no briefs),
+  `mergeEntries` (dedupe by name, prefer the one with a brief),
+  `rankLookup` (exact then prefix then substring, each tier alphabetical).
+- **`src/docs/index.ts`** — `DocsIndex`: lazy-loads bundled
+  `data/openfoam-classes.json`, overlays a disk cache in
+  `context.globalStorageUri/doc-index-<version>.json`, and when
+  `openfoam.docs.onlineHelp` is true fires a one-shot background fetch of
+  `annotated.html` + `classes.html` from
+  `cpp.openfoam.org/<openfoam.docs.apiVersion>` (Node `https`, no global
+  `fetch`), 7-day TTL, all failures silent. `lookup()`, `exact()` (case-
+  sensitive, for the quiet hover), `fullUrl()`.
+- **`src/docs/lookupComplete.ts`** — `?` `CompletionItemProvider`
+  (trigger `"?"`). Fires on `/(?:^|[\s{}(=])\?([\w:]+)$/`, not in `//`
+  or an odd-quote string. Items: kind `Reference`, `documentation` =
+  brief + `[Open in browser ↗](url)`, `filterText = "?"+name`. Accept:
+  `insertText = ""` over the whole `?query` range → the query just
+  disappears, no edit, no navigation.
+- **`src/docs/hover.ts`** — `HoverProvider`; word range
+  `/\??[A-Za-z_][\w:]*/`, strip leading `?`, `index.exact(word)` (exact
+  case-sensitive match only, so it stays silent on common words and the
+  server's own hovers are unaffected — VS Code stacks providers).
+- **`src/docs/register.ts`** — `registerDocsHelp(context)` builds one
+  shared `DocsIndex`, registers both providers.
+- **`src/extension.ts`** — `registerDocsHelp(context)` next to
+  `registerInlineScaffold`.
+- **`package.json`** — settings `openfoam.docs.onlineHelp` (bool, false),
+  `openfoam.docs.apiVersion` (string, `v14`); `insertMode` enum text
+  updated `??`/`@`.
+- **`scripts/build-doc-index.js`** (new) — release-time generator;
+  fetches both Doxygen pages, merges, writes minified
+  `data/openfoam-classes.json`. `scripts/**` is `.vscodeignore`'d so the
+  script is not packaged; `data/openfoam-classes.json` is a new name not
+  in the `data/NN_*.json` exclusion list, so it ships.
+- **`data/openfoam-classes.json`** — generated: **3796 classes, 2123
+  with a description, 533 KB** (v14). Doxygen's static `annotated.html`
+  only exposes ~2.6k with briefs; `classes.html` fills the rest name-
+  only. Dictionary keywords map to class *suffixes* (`fixedValue` →
+  `fixedValueFvPatchField`), which `rankLookup`'s substring tier covers.
+- **`test/docs.test.ts`** (new) — 7 tests: the parsers, `mergeEntries`
+  precedence, `rankLookup` tiers/limit, and a sanity check on the
+  bundled JSON.
+
+### 2026-09-11 — 0.7.3 Part D follow-up: full class-page text on hover / in the `?` detail pane
+
+User: "when the search item is selected I expected all the content
+relevant to it be fetched from the website and shown in hovering."
+
+- **`src/docs/page.ts`** (new, pure) — `extractDetailedDescription(html)`
+  (first `<div class="textblock">` up to the next member/section marker),
+  `htmlToMarkdown(html, pageUrl)` (tolerant: links resolved relative
+  to the page, `<code>`/`<tt>` → backticks, `<pre>`/`.fragment` → fenced,
+  `<li>` → dash, entities decoded, capped at ~2800 chars), and
+  `pageToMarkdown`.
+- **`src/docs/index.ts`** — `DocsIndex.fetchDoc(entry)`: fetches the
+  class page, `pageToMarkdown`, caches in memory + on disk
+  (`globalStorageUri/pages/<version>/<url>.json`, 7-day TTL). Returns
+  `null` unless `openfoam.docs.onlineHelp` is on. `onlineEnabled` is now
+  a public getter.
+- **`src/docs/hover.ts`** — `provideHover` is async; appends the fetched
+  Detailed Description under the brief when available.
+- **`src/docs/lookupComplete.ts`** — items carry their `DocEntry`;
+  `resolveCompletionItem` (fired when an item is highlighted) fetches the
+  page and rewrites `documentation` with the full text. So browsing the
+  `?` list shows each class's full docs in the detail pane beside the
+  cursor — no accept, no buffer change.
+- **`package.json`** — `openfoam.docs.onlineHelp` description broadened:
+  it now governs the index refresh *and* the on-demand page fetches.
+- **`test/docs.test.ts`** — +3 `page.ts` cases (section extraction stops
+  at the next `groupheader`; relative-link + code + fence rendering;
+  empty when no textblock).
+
+`npm run compile / lint / test` clean — **130 passed / 1 skipped**.
+
+### 2026-09-11 — 0.7.3 Part D follow-up: `?` accept does something (`openfoam.docs.onAccept`)
+
+User: accepting a `?` item "disappears and nothing happens" — wants the
+fetched info shown after Enter. Chosen: a hover box (default), with the
+other options kept behind a setting.
+
+- **`src/docs/onAccept.ts`** (new) — registers internal command
+  `openfoam.docs._accepted`, invoked by each `?` completion item's
+  `item.command` (runs after the edit that clears `?query`). Branches on
+  `openfoam.docs.onAccept`:
+  - `"hover"` (default) — `fetchDoc(entry)`, stash
+    `DocsIndex.pendingAccept = { uri, line, body }`, then
+    `setTimeout(30) → editor.action.showHover`.
+  - `"browser"` — `simpleBrowser.show` on the class URL, falling back to
+    `env.openExternal`.
+  - `"comment"` — insert `// <name> — <brief>\n// <url>\n` at the cursor.
+  - `"none"` — nothing.
+- **`src/docs/index.ts`** — `pendingAccept` field on `DocsIndex`.
+- **`src/docs/hover.ts`** — `provideHover` checks `pendingAccept` first
+  (same uri + line), returns that Hover once and clears it, so
+  `showHover` right after an accept lands on real content even though
+  there's no word under the cursor.
+- **`src/docs/lookupComplete.ts`** — items now set
+  `item.command = { command: ACCEPT_COMMAND, arguments: [entry] }`.
+- **`src/docs/register.ts`** — `registerDocsOnAccept` wired in first.
+- **`package.json`** — `openfoam.docs.onAccept` enum
+  (`hover`/`browser`/`comment`/`none`, default `hover`). The command is
+  not declared in `contributes.commands`, so it stays out of the palette.
+
+`npm run compile / lint / test` clean — **130 passed / 1 skipped**.
+
+### 2026-09-11 — 0.7.3 Part D fixes: stale-range bug, doc panel, more detail
+
+User reported: after `?wallDist` + Enter, the popup vanished, `walldist`
+was left in the file (→ "Unknown key", "Syntax error"), the hover closed
+on mouse-move, and they wanted more detail.
+
+- **Stale replace-range bug (the real one).** Both `?` and `@` providers
+  returned a plain `CompletionItem[]`, so VS Code cached the list and
+  filtered client-side without re-calling the provider — the items'
+  `range` stayed pinned to the `?w` typed at first request while the
+  user kept typing, so accepting replaced only that stale prefix and
+  left the tail (`alldist`) in the buffer. Fixed: both providers now
+  return `new vscode.CompletionList(items, /* isIncomplete */ true)`, so
+  VS Code re-queries every keystroke and the range always covers the
+  current `?query` / `@query`. (`inlineComplete.ts`, `lookupComplete.ts`.)
+- **`onAccept` is now a persistent panel, not a hover.** `hover` mode
+  (transient, closed on mouse-move) replaced by **`panel`** (default):
+  `src/docs/docPanel.ts` — one reused `WebviewPanel`
+  (`ViewColumn.Beside`, `retainContextWhenHidden`, `enableScripts:false`)
+  that renders the class page's own HTML (`extractArticle` +
+  `absolutizeUrls`, `<script>` stripped, themed with `--vscode-*`, CSP
+  `img-src https:`). Stays until the user closes it. Falls back to the
+  bundled brief + a hint when `onlineHelp` is off. `pendingAccept` /
+  `showHover` plumbing removed from `index.ts` / `hover.ts`.
+- **More detail.** `page.ts` `MAX_CHARS` 2800 → 6000 for the
+  identifier-hover / list detail pane; the panel shows the whole article
+  (all sections, not just the brief).
+- **`index.ts`** — `fetchPageHtml(entry)` (raw HTML, disk-cached under
+  `pages/<version>/`, gated on `onlineHelp`); `fetchDoc` now derives its
+  Markdown from that.
+- **`page.ts`** — new `extractArticle`, `absolutizeUrls`.
+- **`package.json`** — `openfoam.docs.onAccept` enum `hover` → `panel`
+  (default `panel`).
+- **`test/docs.test.ts`** — +2 (`extractArticle` header→contents, drops
+  script + footer + top nav; `absolutizeUrls` only rewrites relatives).
+
+`npm run compile / lint / test` clean — **132 passed / 1 skipped**.
+
+### 2026-09-11 — doc panel: distinguish "off" from "fetch failed"
+
+User enabled `openfoam.docs.onlineHelp` but the panel still said "Enable
+openfoam.docs.onlineHelp…" — because the fallback text was shown for
+*both* the setting being off *and* the fetch throwing.
+
+- **`index.ts`** — `fetchPageHtml(entry, force?)` now records
+  `lastPageError` and does **not** negative-cache a failure (so Retry
+  re-attempts); `force` bypasses mem + disk cache.
+- **`docPanel.ts`** — `enableScripts: true` with a nonce'd script;
+  `onDidReceiveMessage` handles `enable` / `retry` / `open`. Three
+  distinct states: full page; **off** → brief + "Enable online help"
+  button (flips the setting) + "Open in browser"; **on but fetch failed**
+  → brief + the actual error + "Retry" + "Open in browser".
+
+`npm run compile / lint / test` clean — **132 passed / 1 skipped**.
+Still 0.7.3, unreleased, uncommitted.
+
+### 2026-09-11 — docs fetch: tolerate non-conformant HTTP ("Parse Error: JS Exception")
+
+A user behind a proxy got `Parse Error: JS Exception` on class pages
+(the origin responds fine directly — an intermediary rewrites the
+response into something Node's strict `llhttp` parser rejects). First
+tried `insecureHTTPParser: true` on `https.get`; the user still hit it
+(VS Code's proxy agent likely bypasses the per-request parser option).
+`src/docs/index.ts` `httpGet` is now a two-step: `nodeGet` (Node
+`https`, still `insecureHTTPParser: true`) → on *any* failure fall back
+to **`curlGet`** (`execFile("curl", ["-sSL","--compressed",…])` — its
+own HTTP stack + tolerant parser + honours proxy env). Error message
+combines both failures. `scripts/build-doc-index.js` keeps
+`insecureHTTPParser: true`. `npm run compile / lint / test` clean —
+**132 passed / 1 skipped**.

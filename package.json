@@ -2,7 +2,7 @@
   "name": "openfoam-language-support",
   "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
-  "version": "0.7.1",
+  "version": "0.7.3",
   "publisher": "arefhm94",
   "repository": {
     "type": "git",
@@ -95,6 +95,25 @@
         "path": "./snippets/openfoam.code-snippets"
       }
     ],
+    "semanticTokenTypes": [
+      { "id": "geometryFile", "description": "A value that names a geometry file present in constant/triSurface/" },
+      { "id": "featureEdge", "description": "A value that names a feature-edge (.eMesh) file" },
+      { "id": "caseVariable", "description": "A $reference that resolves to a variable defined in the case" },
+      { "id": "boundaryPatch", "description": "A name that matches a patch in constant/polyMesh/boundary" },
+      { "id": "includePath", "description": "An #include path that resolves to an existing file" }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "openfoam",
+        "scopes": {
+          "geometryFile": ["entity.name.type"],
+          "featureEdge": ["entity.name.function"],
+          "caseVariable": ["variable"],
+          "boundaryPatch": ["entity.name.tag"],
+          "includePath": ["string"]
+        }
+      }
+    ],
     "commands": [
       {
         "command": "openfoam.refreshKeywordDB",
@@ -113,6 +132,26 @@
         "command": "openfoam.showSchemeDoc",
         "title": "OpenFOAM: Show Scheme Documentation",
         "icon": "$(book)"
+      },
+      {
+        "command": "openfoam.searchInsert",
+        "title": "OpenFOAM: Search & Configure (Insert Block)",
+        "icon": "$(triangle-down)"
+      },
+      {
+        "command": "openfoam.scaffold.write",
+        "title": "OpenFOAM: Write Staged Block",
+        "icon": "$(check)"
+      },
+      {
+        "command": "openfoam.scaffold.changeTarget",
+        "title": "OpenFOAM: Change Staged Block Target",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "openfoam.scaffold.discard",
+        "title": "OpenFOAM: Discard Staged Block",
+        "icon": "$(trash)"
       },
       {
         "command": "openfoam.insertTurbulenceBlock",
@@ -173,6 +212,28 @@
       ]
     },
     "menus": {
+      "commandPalette": [
+        { "command": "openfoam.scaffold.write", "when": "false" },
+        { "command": "openfoam.scaffold.changeTarget", "when": "false" },
+        { "command": "openfoam.scaffold.discard", "when": "false" }
+      ],
+      "editor/title": [
+        {
+          "command": "openfoam.scaffold.write",
+          "when": "openfoam.stagingTab",
+          "group": "navigation@1"
+        },
+        {
+          "command": "openfoam.scaffold.changeTarget",
+          "when": "openfoam.stagingTab",
+          "group": "navigation@2"
+        },
+        {
+          "command": "openfoam.scaffold.discard",
+          "when": "openfoam.stagingTab",
+          "group": "navigation@3"
+        }
+      ],
       "view/title": [
         {
           "command": "openfoam.refreshCaseTree",
@@ -214,6 +275,14 @@
             "line": 2
           }
         ]
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "openfoam.searchInsert",
+        "key": "ctrl+alt+o",
+        "mac": "cmd+alt+o",
+        "when": "editorLangId == openfoam"
       }
     ],
     "configuration": {
@@ -258,6 +327,46 @@
           "type": "string",
           "default": "",
           "description": "Override automatic case root detection. Leave empty to auto-detect."
+        },
+        "openfoam.scaffold.insertMode": {
+          "type": "string",
+          "enum": [
+            "inline",
+            "stagingTab"
+          ],
+          "enumDescriptions": [
+            "Accepting an `@` scaffold suggestion drops the block straight in at the cursor as a snippet (tab through the fields).",
+            "Accepting an `@` scaffold suggestion opens the editable staging tab with a Write button instead."
+          ],
+          "default": "inline",
+          "description": "What the `@` Search & Configure suggestions do when accepted."
+        },
+        "openfoam.docs.onlineHelp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Let the `?` docs lookup and identifier hovers reach cpp.openfoam.org — refreshing the class index and fetching each class's full 'Detailed Description' on demand (cached ~7 days). Off by default: a bundled offline index still provides one-line briefs and links."
+        },
+        "openfoam.docs.apiVersion": {
+          "type": "string",
+          "default": "v14",
+          "description": "OpenFOAM C++ API docs version for the `?` lookup and hovers (e.g. v14) — the cpp.openfoam.org/<version>/ path segment."
+        },
+        "openfoam.docs.onAccept": {
+          "type": "string",
+          "enum": [
+            "panel",
+            "browser",
+            "comment",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Open the class documentation in a persistent panel beside the editor.",
+            "Open the class page in VS Code's Simple Browser tab.",
+            "Insert a // comment with the class brief and page URL.",
+            "Do nothing beyond clearing the typed query."
+          ],
+          "default": "panel",
+          "description": "What pressing Enter on a `?` OpenFOAM C++ API suggestion does."
         },
         "openfoam.enableIncludeNavigation": {
           "type": "boolean",
