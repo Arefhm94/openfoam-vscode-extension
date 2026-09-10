@@ -716,3 +716,78 @@ unused/redundant. Findings:
 **Verification**: `tsc -b`, `npm run lint` (both `src` and `test`),
 `npm test` (extension: 79 passed/1 skipped) and `npm test` (grammar
 repo: 28/28) all pass after every change above.
+
+## 2026-09-10 — Release: 0.7.0, and a real CI-breaking bug found in production
+
+Bumped to `0.7.0`, updated `CHANGELOG.md`, added a plain-language
+"What's New" section to `README.md` (and fixed several stale README
+sections describing the removed Inspector Panel command, which predates
+this work). Built and locally verified the `.vsix` package.
+
+**Real bug found the hard way**: the user pushed and ran CI, which
+failed in ~13s, and separately hit Marketplace publish timeouts. The CI
+failure was real and mine to have caught earlier: `package.json`'s
+`tree-sitter-openfoam` dependency was `file:../tree-sitter-openfoam` —
+a path to a **sibling directory that only exists on the local dev
+machine** (the grammar repo from Phase 1, never pushed anywhere).
+`npm ci` in GitHub Actions checks out only this repo, so that path
+never resolves and `npm ci` fails immediately — matching the fast
+13-second failure. This was flagged in the Phase 5 log as a known
+future concern ("switch to a real semver range once published to npm")
+but its severity was understated: it didn't just affect eventual
+publishing, it broke CI on every single push from the moment the
+dependency was added in Phase 2, and would have broken `npm install`
+for anyone else who ever cloned this repo.
+
+**Fix**: vendored the grammar package's built output (`grammar.js`,
+`src/`, `queries/`, `tree-sitter.json`, the compiled `.wasm` — exactly
+what `tree-sitter-openfoam/package.json`'s `files` field already
+scoped it to) into `vendor/tree-sitter-openfoam/` inside this repo, and
+changed the dependency to `file:vendor/tree-sitter-openfoam` — a path
+*inside* the checked-out repo, so `npm ci` can resolve it anywhere,
+including a fresh CI runner. Added `vendor/**` to `.vscodeignore` (only
+needed for `npm install` to resolve from; the real installed copy in
+`node_modules/tree-sitter-openfoam` is what actually ships). Verified
+by simulating CI exactly: `rm -rf node_modules && npm ci && npm run
+compile && npm run lint && npm test` — all pass from a clean state.
+Rebuilt `.vsix`: unchanged size (2.03 MB), confirming `vendor/` was
+correctly excluded from the shipped package.
+
+This is a stopgap, not the long-term fix — once `tree-sitter-openfoam`
+is published to npm (or at minimum pushed to its own GitHub repo), the
+dependency should switch to a real semver range or a git URL, and
+`vendor/tree-sitter-openfoam/` should be deleted. Vendoring makes the
+repo self-contained and CI-safe *today* without requiring an external
+publish decision to be made under pressure while mid-release.
+
+The Marketplace `Request timeout: /_apis/gallery` errors are unrelated
+— a separate, transient network issue between `vsce` and the Marketplace
+gallery API, not a problem with the package or this fix.
+
+**Correction to the above**: the first pass at this fix was verified
+insufficiently and was actually still broken. After changing
+`package.json` and running a plain `npm install`, `rm -rf node_modules
+&& npm ci && npm test` appeared to pass — but that was misleading:
+`package-lock.json`'s `node_modules/tree-sitter-openfoam` entry still
+had `"resolved": "file:../tree-sitter-openfoam"` (the *old* sibling
+path) even after the `package.json` change and a plain `npm install`;
+npm doesn't always re-resolve an already-satisfied lockfile entry just
+because the declared dependency string changed. The `npm ci` "pass" was
+silently reading from the still-present sibling directory, not the
+vendored copy — so the fix was cosmetic, not real, and would have
+failed in actual CI exactly as before. Caught by actually testing the
+claim properly: temporarily renamed the sibling directory out of the
+way and re-ran `rm -rf node_modules && npm ci` — this reproduced the
+exact `ENOENT ... tree-sitter-openfoam/package.json` failure, proving
+the first fix hadn't worked. Resolved by `npm uninstall
+tree-sitter-openfoam && npm install tree-sitter-openfoam@file:vendor/tree-sitter-openfoam`,
+which forced npm to genuinely re-resolve and rewrite
+`package-lock.json`'s `resolved` field to `file:vendor/tree-sitter-openfoam`.
+Re-ran the same sibling-hidden test again: `npm ci` and the full
+`compile`/`lint`/`test` pipeline now pass with the sibling directory
+genuinely absent. Restored the sibling directory afterward (it's still
+needed for local grammar-repo co-development) and rebuilt the `.vsix`
+one final time — unchanged, 2.03 MB. Lesson: when a fix's claim is "this
+works without X", the only real verification is testing with X actually
+absent, not just re-running the same command in an environment where X
+still happens to be present.

@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "tree-sitter grammar for OpenFOAM/Helyx dictionary files",
+    "authors": [{ "name": "Aref Moalemi" }]
+  },
+  "grammars": [
+    {
+      "name": "openfoam",
+      "camelcase": "Openfoam",
+      "scope": "source.openfoam",
+      "path": ".",
+      "file-types": ["foam", "dict"],
+      "highlights": "queries/highlights.scm"
+    }
+  ]
+}

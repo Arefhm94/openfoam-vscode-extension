@@ -1,0 +1,30 @@
+{
+  "name": "tree-sitter-openfoam",
+  "version": "0.1.0",
+  "description": "tree-sitter grammar for OpenFOAM/Helyx dictionary files",
+  "license": "MIT",
+  "main": "grammar.js",
+  "files": [
+    "grammar.js",
+    "src/**",
+    "queries/**",
+    "tree-sitter.json",
+    "tree-sitter-openfoam.wasm"
+  ],
+  "keywords": [
+    "openfoam",
+    "helyx",
+    "cfd",
+    "parser",
+    "tree-sitter"
+  ],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "build-wasm": "tree-sitter build --wasm",
+    "test": "tree-sitter test",
+    "pretest": "npm run generate"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.27.0"
+  }
+}

@@ -49,6 +49,12 @@ data/README.md
 test/**
 .github/**
 
+# Vendored tree-sitter-openfoam source — only needed so `npm install`
+# can resolve the "file:vendor/tree-sitter-openfoam" dependency (see
+# package.json); node_modules/tree-sitter-openfoam already has the real
+# installed copy the language server actually loads at runtime.
+vendor/**
+
 # Build artifacts / lockfile — not needed in the package.
 package-lock.json
 tsconfig.tsbuildinfo
