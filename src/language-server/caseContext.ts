@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { findCaseRootFromPath } from '../shared/caseRoot';
 
 export interface VarDef {
   name: string;
@@ -17,17 +18,7 @@ export function uriToPath(uri: string): string {
 }
 
 export function findCaseRoot(fileUri: string): string | null {
-  let dir = path.dirname(uriToPath(fileUri));
-  for (let i = 0; i < 12; i++) {
-    if (
-      fs.existsSync(path.join(dir, 'system', 'controlDict')) ||
-      fs.existsSync(path.join(dir, 'system', 'fvSchemes'))
-    ) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
+  return findCaseRootFromPath(uriToPath(fileUri));
 }
 
 /**

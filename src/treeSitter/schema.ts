@@ -23,6 +23,10 @@ export interface SchemaDiagnostic {
   range: SimpleRange;
   message: string;
   severity: SchemaDiagnosticSeverity;
+  /** For "Unknown key" diagnostics: the schema's real key names at this
+   *  nesting level, so a client-side quick-fix can offer the closest one
+   *  without re-deriving the applicable schema itself. */
+  data?: { candidates: string[] };
 }
 
 function nodeRange(node: SyntaxNode): SimpleRange {
@@ -109,13 +113,19 @@ function checkValue(entryNode: SyntaxNode, key: string, spec: FieldSpec, out: Sc
 
 function validateNode(node: SyntaxNode, schema: DictSchema, out: SchemaDiagnostic[], ignoreKeys: ReadonlySet<string>) {
   const { entries, blocks } = directMembers(node);
+  const candidates = Object.keys(schema);
 
   for (const [key, entryNode] of entries) {
     if (ignoreKeys.has(key)) continue;
     const spec = schema[key];
     if (!spec) {
       const keyNode = entryNode.childForFieldName("key") ?? entryNode;
-      out.push({ range: nodeRange(keyNode), severity: "warning", message: `Unknown key '${key}'` });
+      out.push({
+        range: nodeRange(keyNode),
+        severity: "warning",
+        message: `Unknown key '${key}'`,
+        data: { candidates },
+      });
       continue;
     }
     checkValue(entryNode, key, spec, out);
@@ -126,7 +136,12 @@ function validateNode(node: SyntaxNode, schema: DictSchema, out: SchemaDiagnosti
     const spec = schema[key];
     if (!spec) {
       const nameNode = blockNode.childForFieldName("name") ?? blockNode;
-      out.push({ range: nodeRange(nameNode), severity: "warning", message: `Unknown key '${key}'` });
+      out.push({
+        range: nodeRange(nameNode),
+        severity: "warning",
+        message: `Unknown key '${key}'`,
+        data: { candidates },
+      });
       continue;
     }
     if (spec.type === "dict" && spec.keywords) {

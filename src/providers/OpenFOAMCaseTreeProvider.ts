@@ -2,6 +2,25 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+/** Cheap sniff of the first few KB for POINT_DATA/CELL_DATA — avoids
+ *  reading a potentially multi-MB legacy-VTK file in full just to route
+ *  the click. */
+function looksLikeFieldData(fsPath: string): boolean {
+  try {
+    const fd = fs.openSync(fsPath, 'r');
+    try {
+      const buf = Buffer.alloc(8192);
+      const n = fs.readSync(fd, buf, 0, buf.length, 0);
+      const head = buf.toString('utf8', 0, n);
+      return /\bPOINT_DATA\b|\bCELL_DATA\b/.test(head);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
 export class CaseItem extends vscode.TreeItem {
   constructor(
     public readonly label: string,
@@ -15,14 +34,24 @@ export class CaseItem extends vscode.TreeItem {
       this.resourceUri = resourceUri;
       if (!isDirectory) {
         const ext = path.extname(label).toLowerCase();
-        const isGeometry = ['.stl', '.obj', '.vtk'].includes(ext);
-        this.command = {
-          command: isGeometry ? 'openfoam.previewGeometry' : 'vscode.open',
-          title: isGeometry ? 'Preview Geometry' : 'Open File',
-          arguments: [resourceUri],
-        };
+        const isVtkFamily = ['.vtk', '.vtp'].includes(ext);
+        const isGeometry = ['.stl', '.obj'].includes(ext) || isVtkFamily;
+        // `.vtp` and a `.vtk` that actually carries POINT_DATA/CELL_DATA
+        // (foamToVTK / postProcessing output) go to the field viewer
+        // (color-by-array, legend); a bare geometry `.vtk` (e.g. a
+        // featureEdgeMesh) still gets the plain 3D preview.
+        const isField = ext === '.vtp' || (ext === '.vtk' && looksLikeFieldData(resourceUri.fsPath));
+        if (isGeometry) {
+          this.command = {
+            command: isField ? 'openfoam.previewField' : 'openfoam.previewGeometry',
+            title: isField ? 'Preview Field Data' : 'Preview Geometry',
+            arguments: [resourceUri],
+          };
+          this.iconPath = new vscode.ThemeIcon(isField ? 'graph-line' : 'eye');
+        } else {
+          this.command = { command: 'vscode.open', title: 'Open File', arguments: [resourceUri] };
+        }
         this.tooltip = resourceUri.fsPath;
-        if (isGeometry) this.iconPath = new vscode.ThemeIcon('eye');
       }
     }
     if (isDirectory) {
@@ -33,9 +62,22 @@ export class CaseItem extends vscode.TreeItem {
   }
 }
 
-export class OpenFOAMCaseTreeProvider implements vscode.TreeDataProvider<CaseItem> {
+export class OpenFOAMCaseTreeProvider
+  implements vscode.TreeDataProvider<CaseItem>, vscode.TreeDragAndDropController<CaseItem>
+{
   private _onDidChangeTreeData = new vscode.EventEmitter<CaseItem | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  // Lets a file be dragged out of *this* tree (e.g. into the geometry/
+  // field viewer panels) the same way dragging from VS Code's own
+  // Explorer already works — those panels just read `text/uri-list` off
+  // whatever was dropped, regardless of which tree it came from.
+  readonly dropMimeTypes: readonly string[] = [];
+  readonly dragMimeTypes: readonly string[] = ['text/uri-list'];
+  handleDrag(source: readonly CaseItem[], dataTransfer: vscode.DataTransfer): void {
+    const uris = source.filter(i => i.resourceUri && !i.isDirectory).map(i => i.resourceUri!.toString());
+    if (uris.length) dataTransfer.set('text/uri-list', new vscode.DataTransferItem(uris.join('\r\n')));
+  }
 
   private caseRoot: string | null = null;
   private _storedRoot: string | null = null;
@@ -52,6 +94,10 @@ export class OpenFOAMCaseTreeProvider implements vscode.TreeDataProvider<CaseIte
   refresh(): void {
     this.detectCaseRoot();
     this._onDidChangeTreeData.fire();
+  }
+
+  getCaseRoot(): string | null {
+    return this.caseRoot;
   }
 
   private detectCaseRoot(): void {

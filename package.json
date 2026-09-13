@@ -2,7 +2,7 @@
   "name": "openfoam-language-support",
   "displayName": "OpenFOAM Dictionary Support",
   "description": "Syntax highlighting and IntelliSense for OpenFOAM dictionary files",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "publisher": "arefhm94",
   "repository": {
     "type": "git",
@@ -96,21 +96,46 @@
       }
     ],
     "semanticTokenTypes": [
-      { "id": "geometryFile", "description": "A value that names a geometry file present in constant/triSurface/" },
-      { "id": "featureEdge", "description": "A value that names a feature-edge (.eMesh) file" },
-      { "id": "caseVariable", "description": "A $reference that resolves to a variable defined in the case" },
-      { "id": "boundaryPatch", "description": "A name that matches a patch in constant/polyMesh/boundary" },
-      { "id": "includePath", "description": "An #include path that resolves to an existing file" }
+      {
+        "id": "geometryFile",
+        "description": "A value that names a geometry file present in constant/triSurface/"
+      },
+      {
+        "id": "featureEdge",
+        "description": "A value that names a feature-edge (.eMesh) file"
+      },
+      {
+        "id": "caseVariable",
+        "description": "A $reference that resolves to a variable defined in the case"
+      },
+      {
+        "id": "boundaryPatch",
+        "description": "A name that matches a patch in constant/polyMesh/boundary"
+      },
+      {
+        "id": "includePath",
+        "description": "An #include path that resolves to an existing file"
+      }
     ],
     "semanticTokenScopes": [
       {
         "language": "openfoam",
         "scopes": {
-          "geometryFile": ["entity.name.type"],
-          "featureEdge": ["entity.name.function"],
-          "caseVariable": ["variable"],
-          "boundaryPatch": ["entity.name.tag"],
-          "includePath": ["string"]
+          "geometryFile": [
+            "entity.name.type"
+          ],
+          "featureEdge": [
+            "entity.name.function"
+          ],
+          "caseVariable": [
+            "variable"
+          ],
+          "boundaryPatch": [
+            "entity.name.tag"
+          ],
+          "includePath": [
+            "string"
+          ]
         }
       }
     ],
@@ -164,9 +189,29 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "openfoam.monitor.openDashboard",
+        "title": "OpenFOAM: Open Run Dashboard",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "openfoam.parametricStudy.start",
+        "title": "OpenFOAM: Start Parametric Study",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "openfoam.parametricStudy.exportDakota",
+        "title": "OpenFOAM: Export Parametric Study to Dakota",
+        "icon": "$(export)"
+      },
+      {
         "command": "openfoam.previewGeometry",
         "title": "OpenFOAM: Preview Geometry (3D)",
         "icon": "$(eye)"
+      },
+      {
+        "command": "openfoam.previewField",
+        "title": "OpenFOAM: Preview Field Data (VTK)",
+        "icon": "$(graph-line)"
       },
       {
         "command": "openfoam.copyRelativePath",
@@ -182,6 +227,10 @@
         "command": "openfoam.duplicateFile",
         "title": "OpenFOAM: Duplicate File",
         "icon": "$(files)"
+      },
+      {
+        "command": "openfoam.toggleBoolean",
+        "title": "OpenFOAM: Toggle Boolean"
       },
       {
         "command": "openfoam.findFileInCase",
@@ -213,9 +262,26 @@
     },
     "menus": {
       "commandPalette": [
-        { "command": "openfoam.scaffold.write", "when": "false" },
-        { "command": "openfoam.scaffold.changeTarget", "when": "false" },
-        { "command": "openfoam.scaffold.discard", "when": "false" }
+        {
+          "command": "openfoam.scaffold.write",
+          "when": "false"
+        },
+        {
+          "command": "openfoam.scaffold.changeTarget",
+          "when": "false"
+        },
+        {
+          "command": "openfoam.scaffold.discard",
+          "when": "false"
+        },
+        {
+          "command": "openfoam.toggleBoolean",
+          "when": "false"
+        },
+        {
+          "command": "openfoam.parametricStudy.exportDakota",
+          "when": "openfoam.dakotaAvailable"
+        }
       ],
       "editor/title": [
         {
@@ -237,6 +303,11 @@
       "view/title": [
         {
           "command": "openfoam.refreshCaseTree",
+          "when": "view == openfoam.caseExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "openfoam.monitor.openDashboard",
           "when": "view == openfoam.caseExplorer",
           "group": "navigation"
         }
@@ -378,7 +449,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -b && npx esbuild src/webview/geoViewer.ts --bundle --format=iife --outfile=media/geo-viewer.js",
+    "compile": "tsc -b && npx esbuild src/webview/geoViewer.ts --bundle --format=iife --outfile=media/geo-viewer.js && npx esbuild src/webview/fieldViewer.ts --bundle --format=iife --outfile=media/field-viewer.js",
     "watch": "tsc -b -w",
     "pretest": "npm run compile",
     "test": "vitest run",
@@ -388,6 +459,7 @@
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
+    "@kitware/vtk.js": "^36.14.2",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.75.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",

@@ -6102,8 +6102,8 @@
      * @param {Layers} layers - The layers to test.
      * @return {boolean } Whether this and the given layers object have at least one layer in common or not.
      */
-    test(layers) {
-      return (this.mask & layers.mask) !== 0;
+    test(layers2) {
+      return (this.mask & layers2.mask) !== 0;
     }
     /**
      * Returns `true` if the given layer is enabled.
@@ -16947,8 +16947,8 @@
       return cubeUVRenderTarget;
     }
     _compileMaterial(material) {
-      const mesh2 = new Mesh(new BufferGeometry(), material);
-      this._renderer.compile(mesh2, _flatCamera);
+      const mesh = new Mesh(new BufferGeometry(), material);
+      this._renderer.compile(mesh, _flatCamera);
     }
     _sceneToCubeUV(scene2, near, far, cubeUVRenderTarget, position) {
       const fov2 = 90;
@@ -17034,14 +17034,14 @@
         }
       }
       const material = isCubeTexture ? this._cubemapMaterial : this._equirectMaterial;
-      const mesh2 = this._lodMeshes[0];
-      mesh2.material = material;
+      const mesh = this._lodMeshes[0];
+      mesh.material = material;
       const uniforms = material.uniforms;
       uniforms["envMap"].value = texture;
       const size = this._cubeSize;
       _setViewport(cubeUVRenderTarget, 0, 0, 3 * size, 2 * size);
       renderer2.setRenderTarget(cubeUVRenderTarget);
-      renderer2.render(mesh2, _flatCamera);
+      renderer2.render(mesh, _flatCamera);
     }
     _applyPMREM(cubeUVRenderTarget) {
       const renderer2 = this._renderer;
@@ -17696,14 +17696,14 @@
         blending: NoBlending
       });
       material.uniforms.tEquirect.value = texture;
-      const mesh2 = new Mesh(geometry, material);
+      const mesh = new Mesh(geometry, material);
       const currentMinFilter = texture.minFilter;
       if (texture.minFilter === LinearMipmapLinearFilter) texture.minFilter = LinearFilter;
       const camera2 = new CubeCamera(1, 10, this);
-      camera2.update(renderer2, mesh2);
+      camera2.update(renderer2, mesh);
       texture.minFilter = currentMinFilter;
-      mesh2.geometry.dispose();
-      mesh2.material.dispose();
+      mesh.geometry.dispose();
+      mesh.material.dispose();
       return this;
     }
     /**
@@ -18268,7 +18268,7 @@
       depthTest: false,
       depthWrite: false
     });
-    const mesh2 = new Mesh(geometry, material);
+    const mesh = new Mesh(geometry, material);
     const camera2 = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
     let _outputColorSpace = null;
     let _outputToneMapping = null;
@@ -18342,7 +18342,7 @@
       }
       material.uniforms.tDiffuse.value = readBuffer.texture;
       renderer2.setRenderTarget(_savedRenderTarget);
-      renderer2.render(mesh2, camera2);
+      renderer2.render(mesh, camera2);
       _savedRenderTarget = null;
       _isCompositing = false;
     };
@@ -26588,14 +26588,118 @@ void main() {
   var scene = null;
   var camera = null;
   var renderer = null;
-  var mesh = null;
   var ready = false;
   var target = new Vector3(0, 0, 0);
+  var layers = [];
+  var nextLayerId = 1;
+  var LAYER_COLORS = [5093631, 16747085, 5111710, 16731540, 13061631, 16769357, 5111794, 16731469];
+  var layersEl = document.getElementById("layers");
+  function renderLayerList() {
+    if (!layersEl) return;
+    layersEl.innerHTML = "";
+    for (const l of layers) {
+      const chip = document.createElement("span");
+      chip.className = "layer-chip" + (l.visible ? "" : " layer-hidden");
+      const swatch = document.createElement("span");
+      swatch.className = "swatch";
+      swatch.style.background = "#" + l.mesh.material.color.getHexString();
+      chip.appendChild(swatch);
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = l.name;
+      nameSpan.title = "Click to toggle visibility";
+      nameSpan.style.cursor = "pointer";
+      nameSpan.addEventListener("click", () => {
+        l.visible = !l.visible;
+        l.mesh.visible = l.visible;
+        renderLayerList();
+        renderer?.render(scene, camera);
+      });
+      chip.appendChild(nameSpan);
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "\xD7";
+      removeBtn.title = "Remove layer";
+      removeBtn.addEventListener("click", () => removeLayer(l.id));
+      chip.appendChild(removeBtn);
+      layersEl.appendChild(chip);
+    }
+  }
+  function updateLayerLabel() {
+    if (!layers.length) {
+      geoLabel.textContent = "No geometry file open";
+      return;
+    }
+    geoLabel.textContent = `${layers.length} layer${layers.length === 1 ? "" : "s"}  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom  |  click a layer to toggle it`;
+  }
+  function fitCameraToLayers() {
+    if (!layers.length) return;
+    const box = new Box3();
+    let any = false;
+    for (const l of layers) {
+      if (!l.visible) continue;
+      box.union(new Box3().setFromObject(l.mesh));
+      any = true;
+    }
+    if (!any) return;
+    const center = new Vector3();
+    box.getCenter(center);
+    const size = new Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z, 1e-3);
+    target.copy(center);
+    sph.r = maxDim * 1.8;
+    zoomMin = maxDim * 0.02;
+    zoomMax = maxDim * 60;
+    if (camera) {
+      camera.near = Math.max(maxDim / 5e3, 1e-6);
+      camera.far = Math.max(maxDim * 200, 1e3);
+      camera.updateProjectionMatrix();
+    }
+    updateCamera();
+  }
+  function addLayer(fileName, geo) {
+    init();
+    document.getElementById("empty-state")?.style.setProperty("display", "none");
+    const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+    const mat = new MeshPhongMaterial({ color, specular: 3359829, shininess: 40, side: DoubleSide });
+    const layerMesh = new Mesh(geo, mat);
+    scene.add(layerMesh);
+    layers.push({ id: nextLayerId++, name: fileName, mesh: layerMesh, visible: true });
+    renderLayerList();
+    fitCameraToLayers();
+    updateLayerLabel();
+  }
+  function removeLayer(id) {
+    const idx = layers.findIndex((l2) => l2.id === id);
+    if (idx < 0) return;
+    const [l] = layers.splice(idx, 1);
+    scene?.remove(l.mesh);
+    l.mesh.geometry.dispose();
+    l.mesh.material.dispose();
+    renderLayerList();
+    if (layers.length) fitCameraToLayers();
+    else document.getElementById("empty-state")?.style.setProperty("display", "flex");
+    updateLayerLabel();
+    renderer?.render(scene, camera);
+  }
+  function clearAllLayers() {
+    for (const l of layers) {
+      scene?.remove(l.mesh);
+      l.mesh.geometry.dispose();
+      l.mesh.material.dispose();
+    }
+    layers = [];
+    renderLayerList();
+    document.getElementById("empty-state")?.style.setProperty("display", "flex");
+    updateLayerLabel();
+    renderer?.render(scene, camera);
+  }
   var sph = { theta: Math.PI / 4, phi: Math.PI / 3, r: 3 };
   var isDown = false;
   var lx = 0;
   var ly = 0;
   var dragMode = "rotate";
+  var zoomMin = 0.3;
+  var zoomMax = 50;
   function updateCamera() {
     if (!camera) return;
     camera.position.set(
@@ -26657,7 +26761,7 @@ void main() {
       updateCamera();
     });
     geoCanvas.addEventListener("wheel", (e) => {
-      sph.r = Math.max(0.3, Math.min(50, sph.r * (e.deltaY > 0 ? 1.1 : 0.9)));
+      sph.r = Math.max(zoomMin, Math.min(zoomMax, sph.r * (e.deltaY > 0 ? 1.1 : 0.9)));
       updateCamera();
       e.preventDefault();
     }, { passive: false });
@@ -26716,7 +26820,7 @@ void main() {
     for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
     return u;
   }
-  function parseSTL(bytes, isBinary) {
+  function parseSTL(bytes, isBinary, normalize2 = true) {
     const geo = new BufferGeometry();
     if (isBinary) {
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -26755,7 +26859,7 @@ void main() {
       geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
       geo.setAttribute("normal", new BufferAttribute(new Float32Array(nrm), 3));
     }
-    normalizeGeometry(geo);
+    if (normalize2) normalizeGeometry(geo);
     return geo;
   }
   function normalizeGeometry(geo) {
@@ -26769,7 +26873,7 @@ void main() {
     const s = 2 / Math.max(sz.x, sz.y, sz.z, 1e-3);
     geo.scale(s, s, s);
   }
-  function parseOBJ(bytes) {
+  function parseOBJ(bytes, normalize2 = true) {
     const text = new TextDecoder().decode(bytes);
     const pos = [], nrm = [], idx = [];
     const v = [], vn = [];
@@ -26799,10 +26903,11 @@ void main() {
     geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
     if (nrm.length) geo.setAttribute("normal", new BufferAttribute(new Float32Array(nrm), 3));
     geo.setIndex(idx);
-    normalizeGeometry(geo);
+    if (!nrm.length) geo.computeVertexNormals();
+    if (normalize2) normalizeGeometry(geo);
     return geo;
   }
-  function parseVTK(bytes) {
+  function parseVTK(bytes, normalize2 = true) {
     const text = new TextDecoder().decode(bytes);
     const lines = text.split("\n");
     const pos = [];
@@ -26826,14 +26931,14 @@ void main() {
     if (i >= lines.length) {
       const geo2 = new BufferGeometry();
       geo2.setAttribute("position", new BufferAttribute(new Float32Array(pts), 3));
-      normalizeGeometry(geo2);
+      if (normalize2) normalizeGeometry(geo2);
       return geo2;
     }
     const polyMatch = lines[i].match(/(POLYGONS|TRIANGLE_STRIP)\s+(\d+)\s+(\d+)/);
     if (!polyMatch) {
       const geo2 = new BufferGeometry();
       geo2.setAttribute("position", new BufferAttribute(new Float32Array(pts), 3));
-      normalizeGeometry(geo2);
+      if (normalize2) normalizeGeometry(geo2);
       return geo2;
     }
     i++;
@@ -26857,7 +26962,8 @@ void main() {
     }
     const geo = new BufferGeometry();
     geo.setAttribute("position", new BufferAttribute(new Float32Array(pos), 3));
-    normalizeGeometry(geo);
+    geo.computeVertexNormals();
+    if (normalize2) normalizeGeometry(geo);
     return geo;
   }
   var thumbRenderer = null;
@@ -26910,37 +27016,23 @@ void main() {
   window.addEventListener("message", (ev) => {
     const msg = ev.data;
     if (msg.command === "previewGeometry") {
-      init();
-      geoLabel.textContent = msg.fileName || "";
       try {
         const bytes = b64ToBytes(msg.dataBase64);
         const ext = (msg.fileName || "").toLowerCase();
         let geo;
         if (ext.endsWith(".obj")) {
-          geo = parseOBJ(bytes);
+          geo = parseOBJ(bytes, false);
         } else if (ext.endsWith(".vtk")) {
-          geo = parseVTK(bytes);
+          geo = parseVTK(bytes, false);
         } else {
-          geo = parseSTL(bytes, msg.isBinary);
+          geo = parseSTL(bytes, msg.isBinary, false);
         }
-        if (mesh && scene) {
-          scene.remove(mesh);
-          mesh.geometry.dispose();
-          mesh.material.dispose();
-        }
-        const mat = new MeshPhongMaterial({ color: 5093631, specular: 3359829, shininess: 40, side: DoubleSide });
-        mesh = new Mesh(geo, mat);
-        scene.add(mesh);
-        sph.theta = Math.PI / 4;
-        sph.phi = Math.PI / 3;
-        sph.r = 3;
-        target.set(0, 0, 0);
-        updateCamera();
-        const triCount = geo.attributes.position.count / 3;
-        geoLabel.textContent = msg.fileName + " \u2014 " + triCount.toLocaleString() + " tri  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom";
+        addLayer(msg.fileName || `layer ${layers.length + 1}`, geo);
       } catch (err) {
         geoLabel.textContent = "Parse error: " + err.message;
       }
+    } else if (msg.command === "clearLayers") {
+      clearAllLayers();
     } else if (msg.command === "geoDataReady") {
       const img = document.getElementById(msg.canvasId);
       if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary, msg.ext);

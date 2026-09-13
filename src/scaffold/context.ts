@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { collectFeatures, CollectOptions } from "./providers";
 import { InsertableFeature } from "./features";
+import { findCaseRootFromPath } from "../shared/caseRoot";
 
 /** Cached parse of `data/keyword-db.json`. */
 let cachedDb: unknown;
@@ -13,23 +14,7 @@ export function loadKeywordDb(context: vscode.ExtensionContext): unknown {
   return cachedDb;
 }
 
-// (There are already two copies of this walk — extension.ts and
-// language-server/caseContext.ts — consolidating them all is out of scope.)
-export function findCaseRoot(filePath: string): string | null {
-  let dir = path.dirname(filePath);
-  for (let i = 0; i < 12; i++) {
-    if (
-      fs.existsSync(path.join(dir, "system", "controlDict")) ||
-      fs.existsSync(path.join(dir, "system", "fvSchemes"))
-    ) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-  return null;
-}
+export const findCaseRoot = findCaseRootFromPath;
 
 export function detectFieldValueType(doc: vscode.TextDocument): string | undefined {
   const clsM = doc.getText().match(/\bclass\s+(\w+)\s*;/);

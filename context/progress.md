@@ -1235,3 +1235,488 @@ own HTTP stack + tolerant parser + honours proxy env). Error message
 combines both failures. `scripts/build-doc-index.js` keeps
 `insecureHTTPParser: true`. `npm run compile / lint / test` clean —
 **132 passed / 1 skipped**.
+
+## 2026-09-13 — 0.8.0: `context/UPDATE.md` Parts E–H
+
+Implemented the full next-round plan the user asked for: "fix essential
+UI/UX and backend problems first... then geometry viewer/VTK... then a
+dashboard showing residuals... then investigate Dakota... for parametric
+study." Version bumped 0.7.3 → **0.8.0** (this is clearly a feature
+release, not a patch) — user hasn't confirmed the number, flagged in the
+wrap-up.
+
+### Part E — fix-first UI/UX + backend
+
+- **`src/shared/caseRoot.ts`** (new) — `findCaseRootFromPath(filePath)`,
+  the one shared implementation of the case-root walk. `extension.ts`'s
+  own copy replaced with `const findCaseRoot = findCaseRootFromPath`;
+  `language-server/caseContext.ts`'s `findCaseRoot(fileUri)` now
+  delegates (`return findCaseRootFromPath(uriToPath(fileUri))`);
+  `scaffold/context.ts` re-exports it directly. All three call-site
+  shapes preserved exactly (verified: `caseContext.ts`'s version did
+  `path.dirname(uriToPath(fileUri))` first, matching the shared
+  function's own internal `path.dirname()` — no behavior change).
+- **"Did you mean" quick-fix** — `src/shared/levenshtein.ts` (new, pure):
+  `levenshtein(a,b)`, `closestMatch(word, candidates, maxDistance?)`
+  (threshold scales with word length). `treeSitter/schema.ts`'s
+  `SchemaDiagnostic` gained an optional `data: { candidates: string[] }`
+  — `validateNode`'s two "Unknown key" push sites now attach
+  `Object.keys(schema)` as candidates. `server.ts`'s `pushSchemaDiags`
+  copies `.data` onto the LSP `Diagnostic`; `onCodeAction` matches
+  `/^Unknown key '(.+)'$/` diagnostics carrying `data.candidates` and
+  offers `Change to '<closest>'` as a preferred QuickFix
+  (`TextEdit.replace(diag.range, suggestion)` — the range already
+  targets just the key/name node).
+- **Command Palette hygiene** — `openfoam.toggleBoolean` (previously
+  registered but undeclared) added to `contributes.commands` and to
+  `commandPalette` with `when: false` — documents the CodeAction-only
+  intent instead of leaving it ambiguous.
+- Deferred (noted, not built): extractor regex→real-parsing rewrite,
+  multi-OpenFOAM-version schema setting, expanded direct LSP-layer test
+  coverage, doc-panel history/search, semantic-token category expansion,
+  onboarding walkthrough. All still valid backlog items from
+  `context/UPDATE.md`.
+
+### Part F — field-data viewer (`@kitware/vtk.js`)
+
+- De-risked before committing to the dependency: installed
+  `@kitware/vtk.js` (36.14.2) and read the actual installed source
+  (not just docs) to confirm the exact API shape —
+  `vtkPoints.newInstance({values})` + `vtkCellArray.newInstance({values})`
+  (raw VTK POLYGONS connectivity blob, unchanged) wired via
+  `polydata.setPoints()`/`setPolys()` (NOT the `{points, polys}`
+  constructor-shortcut idiom seen in many vtk.js examples — traced
+  `PolyData.js`'s `extend()` and found `polys` has no `vtk()`-wrapping
+  normalization, so a real `vtkCellArray` instance must be constructed
+  explicitly or the mapper's `model.polys.getCellSizes()` call breaks).
+  `Mapper`'s scalar-coloring setters (`setColorByArrayName`,
+  `setScalarModeToUsePointData/UseCellData`, `setColorModeToMapScalars`,
+  `setUseLookupTableScalarRange`) confirmed against
+  `ScalarColoringHelper.js`'s macro list, not assumed from memory.
+- **`src/webview/vtkParse.ts`** (new, pure — no DOM/`three`/`vtk.js`) —
+  `parseLegacyVTK(text)`: POINTS, POLYGONS/TRIANGLE_STRIPS (kept as the
+  raw VTK connectivity blob, not triangulated — that's exactly vtk.js's
+  `polys` format), POINT_DATA/CELL_DATA with SCALARS (optional
+  numComponents)/VECTORS/NORMALS/FIELD sub-arrays. Deliberately a new
+  module rather than editing `geoViewer.ts`'s existing triangle-soup
+  `parseVTK()` (which the plain 3D preview still uses, untouched) — an
+  indexed representation is what vtk.js wants, and this avoids any risk
+  to the working geometry-preview path.
+- **`src/webview/fieldViewer.ts`** (new) — vtk.js v1: builds
+  `vtkPolyData` from the parsed points/polys, computes a per-tuple
+  magnitude for any vector array (so coloring never depends on an
+  uncertain "color by vector" mapper mode — always a plain 1-component
+  scalar array), a diverging blue→white→red `vtkColorTransferFunction`,
+  an array `<select>`, and solid/wireframe/points buttons
+  (`Property/Constants` `Representation` enum). `vtkRenderWindow` +
+  `vtkOpenGLRenderWindow.setContainer()` + `vtkRenderWindowInteractor` +
+  `vtkInteractorStyleTrackballCamera` — the standard non-fullscreen vtk.js
+  embed pattern.
+- **`src/workflow/FieldViewerPanel.ts`** (new, mirrors
+  `GeometryPreviewPanel.ts`) — singleton panel, base64-posts the file,
+  warns (doesn't block) above 25 MB.
+- **`OpenFOAMCaseTreeProvider.ts`** — `looksLikeFieldData(fsPath)` sniffs
+  the first 8 KB for `POINT_DATA`/`CELL_DATA` (cheap; a false negative on
+  a huge file just falls back to the plain viewer, never breaks
+  anything). `.vtp` always, `.vtk` when the sniff hits, routes to
+  `openfoam.previewField` (new command, `graph-line` icon) instead of
+  `openfoam.previewGeometry`.
+- **Packaging**: `@kitware/vtk.js` moved to `devDependencies` (matches
+  `three` — it's bundled into `media/field-viewer.js` by esbuild, never
+  needed as a raw runtime `node_modules` copy; confirmed via
+  `vsce ls` that no `node_modules/@kitware/**` files end up packaged).
+  esbuild bundle: **1.2 MB** (tree-shaken from the package's 13.25 MB
+  unpacked size — the plan's own "open question" about bundle size is
+  now answered with a real number, not a guess). Total vsix: 2.05 MB →
+  2.42 MB.
+- **Deferred**: v2 (slicing plane, iso-surface/contour) and v3 (vector
+  glyphs, click-to-probe, multi-block/multi-region) — v1 alone is a real
+  upgrade and the tiers were explicitly designed to land independently.
+- **Tests**: `test/vtkParse.test.ts` (5 cases) against a small synthetic
+  fixture (no real example `.vtk` carries field data — checked; the
+  committed ones are bare `featureEdgeMesh` geometry).
+
+### Part G — live residual & run dashboard
+
+- **`src/monitor/residualLog.ts`** (new, pure) — regex parser for the
+  generic OpenFOAM/HELYX solver-log shape (`Time = N`,
+  `<solver>:  Solving for <field>, Initial residual = …, Final residual
+  = …, No Iterations n` with scalar or `( a b c d )` tuple residuals,
+  `Region: … Courant Number mean: … max: …`, `ExecutionTime = … s
+  ExecutionStepTime = … s ClockTime = … s`, `End`/`Finalising parallel
+  run`). `finalResidualMagnitude()` — the largest-magnitude component,
+  the natural single number to chart for a coupled/vector field.
+- **`test/fixtures/helyxSolve-excerpt.log`** — two full, real `Time =`
+  blocks trimmed verbatim from
+  `examples/Helyx/complex/log/helyxSolve_gen_10p.out` (not synthesized),
+  covering scalar + 4-tuple residuals, Courant, and ExecutionTime lines.
+  `test/residualLog.test.ts` (11 cases) asserts exact values against it.
+- **`src/monitor/convergence.ts`** (new, pure) — `regressionSlope(xs,ys)`
+  (least-squares) + `classifyTrend(history, windowSize=20)`
+  (converging/diverging/stalled/unknown from the slope of
+  log10(residual) vs. iteration) — the scoped, arithmetic-only version
+  of the plan's "physics + ML" idea, modeled on the example case's own
+  `check_convergence_gen_*.out` moving-average/delta approach.
+  `test/convergence.test.ts` (7 cases).
+- **`src/monitor/logTail.ts`** (new) — `LogTail` remembers a byte offset
+  and only reads/parses newly-appended bytes per `poll()` (the example
+  logs already reach 2.4 MB); `findLikelyLogFile(caseRoot)` — most
+  recently modified `log.*`/`*.out`, 2 levels deep, skipping
+  `postProcessing`/`processorN`/etc.
+- **`src/monitor/dashboardPanel.ts`** (new) — one reusable webview
+  (`enableScripts:true`, nonce'd script), `setInterval` polling
+  (1000 ms) pushing only new samples via `postMessage`; the webview
+  accumulates per-`solver:field` series and redraws a hand-rolled canvas
+  log-scale line chart (no charting library) each tick, plus a legend
+  with live trend badges and an info strip. `showDashboard(logPath)` /
+  `openDashboardForCase(caseRoot)` (auto-detects the log, else prompts).
+- **Wiring**: `openfoam.monitor.openDashboard` command (Command Palette
+  + Case Explorer title bar, `pulse` icon); `OpenFOAMCaseTreeProvider`
+  gained a public `getCaseRoot()` getter for the command to use.
+- **Deferred**: the Case Explorer per-case status decoration (idle/
+  running/converged/…) — the dashboard itself has all that state, just
+  not yet fed back into the tree view; parsing the surface-probe/
+  mass-flow data the example's own monitor computes (v2, per the plan).
+
+### Part H — parametric study + Dakota investigation
+
+- **`src/parametric/paramSet.ts`** (new, pure) — `ParamDef` (file +
+  blockPath + key + values) → `cartesianVariants()`, the full grid,
+  zero-padded `variant_NNN` names. `test/paramSet.test.ts` (4 cases).
+- **`src/parametric/substitute.ts`** (new, pure) — `findEntry` (walks
+  `buildOutline` by blockPath, reusing the same outline `queries.ts`
+  already builds for the symbol view) + `substituteEntryValue`
+  (rewrites an *existing* entry's value — deliberately distinct from
+  `scaffold/blockLocator.ts`'s `locateInsertion`, which only knows how
+  to *add* new content) + `replaceRange` (pure text-range surgery for a
+  case-clone's on-disk files, no open document involved). **Found and
+  fixed a real bug during testing**: `entry.range` from `buildOutline`
+  starts at the key token, not the line's column 0 (tree-sitter node
+  ranges exclude leading whitespace) — an early version of
+  `substituteEntryValue` re-prepended the line's indentation itself,
+  which then doubled once `replaceRange` also preserved the original
+  indent via `range.start.character`, producing 8 spaces instead of 4.
+  Caught by `test/substitute.test.ts`'s exact-output assertions; fixed
+  by dropping the redundant indent reconstruction entirely (the range
+  already starts past the whitespace). `test/substitute.test.ts`
+  (7 cases, including the regression).
+- **`src/parametric/sweepRunner.ts`** (new) — `copyCaseDir` (skips
+  `postProcessing`/`processorN`/`dynamicCode`/VCS dirs) +
+  `runSweep(caseRoot, variants)`: one cloned `<caseRoot>_<variant>` dir
+  per variant, edits grouped by file (parse once per file, not per
+  edit), reports `missedEdits` for keys not found rather than throwing.
+  `test/sweepRunner.test.ts` (4 cases, real filesystem via
+  `fs.mkdtempSync`, including a `postProcessing/` exclusion check and a
+  missed-edit case).
+- **`src/parametric/runCommand.ts`** (new) — `OpenFOAM: Start Parametric
+  Study`: text-prompt loop (file / blockPath / key / comma-separated
+  values, repeatable) → modal confirm listing every variant's params →
+  `runSweep` → summary + "Reveal first variant".
+- **Dakota investigation** (verified via WebFetch against Sandia's own
+  site, not from training data alone): real, actively maintained,
+  standalone native application (not a library) for optimization/UQ/
+  DOE/sensitivity/calibration; integrates via its documented black-box
+  interface (writes a parameters file, calls an analysis-driver script,
+  reads back a results file). Confirmed too heavy to bundle/require —
+  built as an **optional, detected** export instead:
+  **`src/parametric/dakotaExport.ts`** (new) — `detectDakota()`
+  (`execFile("dakota", ["-version"])`, resolves `false` on any error/
+  ENOENT), `buildDakotaInput()` (a `multidim_parameter_study` deck: one
+  `discrete_state_set` descriptor per parameter, sanitized to a valid
+  Dakota identifier), `buildAnalysisDriverScript()` (a generated Node
+  driver embedding the case root + `{file,blockPath,key}` targets,
+  `require()`-ing this extension's own compiled `substitute.js` by
+  absolute path so it needs no separate install — reads Dakota's
+  parameters file, applies the same substitution, shells out to a
+  `TODO`-marked solver command, writes a results file).
+  `test/dakotaExport.test.ts` (3 cases). `OpenFOAM: Export Parametric
+  Study to Dakota` command registered but hidden from the palette unless
+  `openfoam.dakotaAvailable` (set via `detectDakota()` at activation).
+  **Not investigated in depth**: OpenTURNS, mentioned in the plan as a
+  lighter-weight alternative — flagged for a future pass, not built.
+- **Deferred**: the parametric-study dashboard (plotting a result
+  against each swept parameter as variants finish, sharing Part G's
+  chart) — the sweep engine and the residual dashboard both exist
+  independently; wiring them together is the natural next step, not
+  done this round.
+
+### Verification
+
+`npm run compile && npm run lint && npm test` clean throughout —
+**179 passed / 1 skipped** (was 132 before this round: +8 in Part E,
++5 in Part F, +18 in Part G, +18 in Part H — 47 new tests altogether).
+`npx vsce package` succeeds; vsix 2.42 MB (up from 2.17 MB, mostly the
+vtk.js bundle). Version bumped to 0.8.0. Not committed; the version
+number is a judgment call flagged to the user, not a confirmed decision.
+
+**Not smoke-tested in an Extension Development Host** (no GUI here) —
+everything above is verified via compile/lint/unit-tests against real
+or realistic fixtures, but nobody has yet: opened a real `.vtp`/
+field-carrying `.vtk` in the new viewer and confirmed it actually
+renders and colors correctly in a live webview; watched the dashboard
+against an actually-running solver (only a static-file tail was
+exercised); run a real parametric sweep against a full example case
+end-to-end; or checked the generated Dakota deck against a real `dakota`
+install. All flagged as the natural next manual-verification pass.
+
+## 2026-09-13 — dashboard fix: stuck on "Watching for solver output…" for a finished run
+
+User reported: opening the dashboard on an already-finished simulation
+never showed any residuals, just the placeholder text forever. Two real
+bugs, found by tracing the actual message flow (not guessed):
+
+1. **Dropped first `postMessage` (the real bug).** `showDashboard()` set
+   `panel.webview.html` and then synchronously called `tick()` (via
+   `startPolling`) in the same turn. `webview.postMessage` does **not**
+   queue — a message posted before the webview's own `<script>` has
+   loaded and attached its `message` listener is silently lost. For a
+   *live* run this only cost the initial backlog (later ticks, once new
+   bytes appear, still land) — but a finished run's log never grows
+   again, so that dropped first message was the *only* one ever going to
+   have data, leaving the panel stuck on its static placeholder forever.
+   Fixed with a ready-handshake: the webview script now
+   `acquireVsCodeApi().postMessage({type:'ready'})` right after attaching
+   its listener; `dashboardPanel.ts` holds a `pendingStart` closure and
+   only calls `startPolling()` once that `'ready'` arrives
+   (`panel.onDidReceiveMessage`, registered once at panel creation, not
+   per `showDashboard()` call).
+2. **Wrong log file could get picked.** `findLikelyLogFile` was "most
+   recently modified `log.*`/`*.out`", full stop — but a real case has
+   several `.out` files that aren't the solver log (confirmed against
+   `examples/Helyx/complex/log/`: `check_convergence_gen_*.out` is a
+   bespoke Python monitor's own output, `helyxHexMesh.out`/`topoSet.out`/
+   `caseSetup.out` are pipeline steps, and any of these could have a
+   later mtime than the actual `helyxSolve_*.out`). Now ranks by tier —
+   canonical `log.<solver>` (2) > a `.out` with "solve" in its name (1) >
+   anything else matching the log-name pattern (0) — most-recently-
+   modified *within* the winning tier. `findLikelyLogFile('examples/
+   Helyx/complex')` now correctly returns a `helyxSolve_*.out` path.
+   Also fixed a real gap while touching this: `PROCESSOR_DIR_RE`
+   (`processorN/`) wasn't actually being skipped by the directory walk
+   despite being documented as skipped — `SKIP_DIRS` only ever held the
+   literal-name set.
+3. Added a `noData` message (posted only if the very first read finds
+   nothing at all) so a wrong/empty log file says so explicitly instead
+   of leaving "Reading log…" showing forever.
+
+**Tests:** `test/logTail.test.ts` (new, 7 cases) — the tiered
+`findLikelyLogFile` ranking (including the exact `examples/Helyx/
+complex/log/` ambiguity, reconstructed with `fs.utimesSync` to control
+mtimes), `postProcessing`/`processorN` exclusion (this is what caught
+the `PROCESSOR_DIR_RE` gap), and `LogTail`'s first-read-vs-incremental
+and shrink/reset behavior. `npm run compile / lint / test` clean —
+**186 passed / 1 skipped** (+7). `.vsix` repackaged, still 2.42 MB.
+
+### 2026-09-13 — three viewer/UX follow-ups: in-panel file pickers + dashboard interactivity
+
+User feedback after trying the new panels: the field/geometry viewers
+had no way to pick a file from inside the panel itself ("i should be
+able to select vtk files in it"), the geometry viewer showed nothing at
+all with nothing to click, and the dashboard "seems just the last
+iteration is shown and is not interactive."
+
+- **Field viewer + geometry viewer: in-panel "Open file…"** —
+  `GeometryPreviewPanel.ts` / `FieldViewerPanel.ts` each gained an
+  `onDidReceiveMessage` handler for `{command:'openFile'}` →
+  `vscode.window.showOpenDialog` (filtered to stl/obj/vtk, or vtk/vtp)
+  → `previewGeometry()`/`previewField()`. The webview HTML for both now
+  has a header button plus an `#empty-state` overlay (own button + hint
+  text) shown until the first file loads — `geoViewer.ts`/
+  `fieldViewer.ts` hide it once a `previewGeometry`/`previewField`
+  message actually loads something. This is also what fixes "nothing
+  shown, nothing can be selected": before this, an empty panel really
+  was just a bare dark rectangle — three.js/vtk.js are never initialized
+  until the first file arrives, and there was no button or text at all.
+  `extension.ts`'s `previewGeometry`/`previewField` commands now always
+  open the panel (with its own picker ready) even when invoked bare
+  with no resolvable file, instead of silently doing nothing or just
+  toasting a message and returning.
+- **Dashboard interactivity** (`src/monitor/dashboardPanel.ts`'s
+  webview script, substantially extended): an "Open Log File…" button
+  (same `showOpenDialog` pattern, re-invokes `showDashboard()` on the
+  picked file — the dashboard's own version of the same in-panel-picker
+  ask); legend entries are now clickable to show/hide that series
+  (`s.hidden`, dimmed + struck-through when off); mouse-wheel zooms the
+  time axis around the cursor, drag pans it, double-click or a "Reset
+  Zoom" button restores the full-data auto-fit; a hover tooltip shows
+  each visible series' nearest value at the cursor's time. `draw()` now
+  tracks its own screen↔time mapping in a `layout` object so the
+  wheel/drag/tooltip handlers can convert `clientX` → data time without
+  re-deriving the axes. (The "just the last iteration" impression was
+  most likely the *info strip* — which by design always shows the
+  latest sample as a live status readout — being mistaken for the whole
+  dashboard; the chart itself already plotted full history. No bug
+  found there, but the new zoom/pan/hover make the full history
+  actually inspectable instead of only visible as a compressed line.)
+
+**Verification:** `npm run compile / lint / test` clean — 186 passed / 1
+skipped (webview `<script>` bodies are template strings, not
+independently unit-tested — this is UI-only surface area, verified by
+reading the generated HTML/script carefully, same as the rest of this
+session's webview work). `.vsix` repackaged, 2.42 MB. Not smoke-tested
+in an Extension Development Host (no GUI here) — the zoom/pan/tooltip
+math and the open-file dialogs are the natural next manual check.
+
+### 2026-09-13 — geometry viewer: multi-layer support; field viewer: found and fixed the real "shows nothing" bug
+
+User: "3d geometry viewer must support multi geometry and put them in
+different layer[s]"; "vtk does not show anything"; "cell and point
+[data] and sub features must be selectable."
+
+**Geometry viewer → multi-layer.** `geoViewer.ts` previously held one
+`THREE.Mesh` at a time, replaced on every load. Now a `Layer[]` list:
+each opened file gets its own mesh, its own color (cycled from an
+8-color palette), and is added *without* the existing per-file
+`normalizeGeometry()` (re-center + rescale-to-unit-box) — multiple case
+parts need to line up in their real relative position/scale, not each
+collapse onto the origin independently. `normalizeGeometry` (still used,
+unchanged, for the single-file thumbnail renderer where filling the
+small preview frame *is* the goal) gained a `normalize` parameter,
+default `true`, so the thumbnail path is untouched. `fitCameraToLayers()`
+unions the bounding boxes of all *visible* layers and re-centers/re-sizes
+the orbit camera to fit — recomputed on add/remove. `GeometryPreviewPanel.ts`
+gained a `#layers` chip strip (color swatch, click-to-toggle visibility,
+`×` to remove) and a "Clear All" button (pure client-side — no host
+round-trip needed); the header button is now "Add geometry layer…", and
+`previewGeometry()` — called both by the panel's own button and by
+Case Explorer clicks — now **adds** a layer instead of replacing.
+Also (found while touching this file): neither the OBJ-without-`vn`
+path nor the VTK path ever called `computeVertexNormals()`, so those
+shapes had no normals for Phong shading to work with — added.
+
+**Field viewer → the actual "shows nothing" bug, found by tracing the
+real vtk.js source** (not guessed): every real `.vtk` file in
+`examples/` (the `featureEdgeMesh` triSurface files) has **no**
+POINT_DATA/CELL_DATA — bare geometry. On that path, `loadDataset()`
+correctly skipped `applyChannel()` (no arrays to color by) via the old
+`arrays.length` guard, but the actor was left with vtk.js's *default*
+material properties — no explicit color, and critically **no
+`computeVertexNormals()`-equivalent for the parsed geometry either**
+(the raw points+polys upload carries no normals, same class of gap as
+the three.js side). Under vtk.js's default Phong-ish lighting, an
+unlit/normal-less surface can render fully black — indistinguishable
+from "nothing." Root-caused by reading the actual installed
+`ScalarColoringHelper.js`/`Property.js` source rather than trusting the
+official examples' happy-path snippets, since I have no browser here to
+just look at the result. Fixed by making the actor **always** visible
+regardless of field data: `actor.getProperty().setLighting(false)` (flat
+unlit color — also arguably the *right* default for a data-viz tool,
+since it shows the true mapped color with no shading distortion) plus an
+explicit default color. Confirmed this doesn't regress the colored path:
+`setScalarVisibility(true)` + `ColorModeToMapScalars` still overrides
+the flat color per-vertex when a channel is selected, independent of the
+lighting flag.
+
+**"Cell and point data and sub features must be selectable."** Reworked
+the array dropdown from one entry per raw array to one entry per
+*channel*: a plain scalar array is still one entry, but a vector/tensor
+array (e.g. `U`, 3-component) now expands into **magnitude + each
+individual component** (`U (magnitude)`, `U — X`, `U — Y`, `U — Z`,
+labelled with real axis names for 3- and 6-component arrays, numeric
+index otherwise) — `buildChannels()`/`channelValues()` in
+`fieldViewer.ts`, replacing the old magnitude-only `arrays`/`applyArray`.
+Point vs. cell location was already distinguishable in the label; now
+so is which part of a vector/tensor you're looking at.
+
+**Verification:** `npm run compile / lint / test` clean — 186 passed / 1
+skipped (unchanged — this round is webview rendering-pipeline logic, not
+independently unit-testable without a browser/WebGL context; verified
+by reading the installed `@kitware/vtk.js` and `three` source directly
+rather than guessing). `.vsix` repackaged, 2.42 MB. **Still not
+smoke-tested in an Extension Development Host** — this is the second
+round of vtk.js fixes made without ever having seen it render; the
+`setLighting(false)` fix is a strong, well-reasoned hypothesis (traced
+through the actual scalar-coloring and property source), not a confirmed
+fix. If the field viewer is still blank after this, the next thing to
+check by hand is whether the WebGL context itself is being created at
+all (a `console.error` in the webview's devtools would show it) —
+something no amount of source-reading from here can rule out.
+
+### 2026-09-13 — geometry viewer zoom fix, multi-select + drag & drop everywhere, Plotly-style dashboard zoom + richer summary
+
+User: "the 3d geometry viewer does not show the geometries properly it
+is too zoomed[,] and still does not allow multi select of geometries and
+drag and drop of them to the screen from the explorer / vtk viewer must
+also support drag and drop. could pyvista be useful here / can u improve
+zoom in and zoom out in dashboard[,] similar to [the] zoom in feature
+that plotly dash offers[,] same ui ux style. also provide more useful
+information under the plot section which is just showing run is
+finished."
+
+**Root cause of "too zoomed."** Removing per-file `normalizeGeometry()`
+in the previous round (needed for real relative multi-layer positioning)
+left the orbit-zoom clamp (`sph.r` bounds `[0.3, 50]`) and the camera's
+`near`/`far` planes (`0.01`/`1000`) as hardcoded constants tuned for the
+*old* always-~2-unit-box single mesh. Real-world-scale geometry (mm-scale
+parts or building-scale cases) would get far-plane-clipped, or on the
+very first wheel-scroll get snapped back to a nonsensical zoom regardless
+of the object's actual size, since the clamp bounds never took `maxDim`
+into account. Fixed in `geoViewer.ts`'s `fitCameraToLayers()`: `zoomMin`/
+`zoomMax` (now module-level `let`s, not constants) and `camera.near`/
+`camera.far` are all recomputed proportionally to the fitted `maxDim`
+every time layers change, so the zoom range always matches what's
+actually on screen.
+
+**Multi-select + drag & drop.** `GeometryPreviewPanel.ts`'s "Add geometry
+layer…" now uses `canSelectMany: true` and loops over every picked file.
+Both `GeometryPreviewPanel.ts` and `FieldViewerPanel.ts` gained a
+`dropFiles` message handler (+ a `uriStringToPath` helper parsing
+`vscode.Uri.parse` output) and matching webview-side `dragover`/
+`dragleave`/`drop` listeners reading `event.dataTransfer.getData('text/uri-list')`
+— this is enough on its own to accept drags from VS Code's built-in
+Explorer, no extra wiring needed there. For the **Case Explorer** (a
+custom `TreeView`) to be a drag *source* too, it needed VS Code's
+`TreeDragAndDropController<T>` API: `OpenFOAMCaseTreeProvider` now
+implements it (`dragMimeTypes: ['text/uri-list']`, `dropMimeTypes: []`
+since it's source-only, `handleDrag` writing the selected items'
+`resourceUri`s), wired into `extension.ts`'s `createTreeView` call via a
+new `dragAndDropController` option.
+
+**"Could pyvista be useful here" — answered, not implemented.** PyVista
+is a Python library; it cannot run inside a VS Code webview, which is a
+browser/Electron JS context with no Python runtime. `@kitware/vtk.js`
+(already integrated into `fieldViewer.ts` two rounds ago) is the
+JS/WebGL equivalent, wrapping the same underlying VTK library PyVista
+itself wraps — so the slicing/iso-surface/glyph features PyVista would
+be used for elsewhere are still reachable, just built directly on the
+vtk.js foundation already in place (the deferred v2/v3 tiers from
+`context/UPDATE.md`'s Part F), not via a second, incompatible library.
+
+**Dashboard: Plotly-Dash-style zoom.** `dashboardPanel.ts`'s chart
+previously only supported x-axis scroll-zoom and drag-to-pan, with a
+"Reset Zoom" button. Rewrote the toolbar/script to add: a **Box
+Zoom**/**Pan** mode toggle (Plotly's own default drag behavior is
+box-zoom, not pan) with the canvas cursor changing to reflect the active
+mode; in Box Zoom mode, dragging draws a rubber-band rectangle
+(`#selbox`) and on mouseup zooms *both* the time axis and the log-scale
+value axis to that rectangle (previously only the time axis could be
+zoomed at all, and never by a matching drag gesture); in Pan mode,
+dragging pans exactly as before; explicit **zoom in**/**zoom out** step
+buttons (`zoomAroundCenter()`, symmetric around the current view center,
+both axes) and an **Autoscale** button/dbl-click replacing "Reset Zoom"
+with the same reset-to-null-view-bounds behavior. Scroll-to-zoom on the
+time axis is unchanged. A new `valMin`/`valMax` pair of module vars holds
+the (linear-space) y-axis zoom window, mirroring the existing `viewMin`/
+`viewMax` for x — `draw()` now uses them when set, falling back to the
+previous auto-fit-to-visible-points behavior otherwise.
+
+**Richer post-run information.** The single `#status` line ("Run
+finished.") is now paired with a `#summary` block built entirely from
+data the webview already holds client-side (no new host→webview
+messages needed): a per-field table (last residual value + trend badge,
+reusing the same `converging`/`diverging`/`stalled`/`unknown` badge
+styling already used in the legend) via `renderSummary()`, plus aggregate
+stats (time span covered, number of fields tracked, and — from a new
+`execHistory` array accumulating each `executionTime` message — average
+wall-clock cost per iteration). Recomputed on every `residuals` and
+`executionTime` message, and once more on `finished`, so it's populated
+throughout a live run, not just at the end.
+
+**Verification:** `npm run compile / lint / test` clean — 186 passed / 1
+skipped (unchanged; this entire round is webview-side rendering/UX logic
+with no new pure-function surface to unit test). `npx vsce package`
+succeeds, 2.43 MB. Updated `CHANGELOG.md`, `README.md` for this round.
+**Still not smoke-tested in an Extension Development Host** — no
+browser/GUI available in this environment; the box-zoom drag math and
+the zoom-clamp fix are traced by hand against the same coordinate
+transforms already used elsewhere in each file, not visually confirmed.

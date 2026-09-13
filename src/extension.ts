@@ -8,6 +8,7 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 import { GeometryPreviewPanel } from "./workflow/GeometryPreviewPanel";
+import { FieldViewerPanel } from "./workflow/FieldViewerPanel";
 import { OpenFOAMDocumentSymbolProvider } from "./providers/OpenFOAMDocumentSymbolProvider";
 import {
   OpenFOAMInlayHintsProvider,
@@ -18,6 +19,10 @@ import { runSearchInsert } from "./scaffold/engine";
 import { registerStagingTab } from "./scaffold/stagingTab";
 import { registerInlineScaffold } from "./scaffold/inlineComplete";
 import { registerDocsHelp } from "./docs/register";
+import { findCaseRootFromPath } from "./shared/caseRoot";
+import { openDashboardForCase } from "./monitor/dashboardPanel";
+import { runParametricStudyCommand, runDakotaExportCommand } from "./parametric/runCommand";
+import { detectDakota } from "./parametric/dakotaExport";
 
 let client: LanguageClient;
 
@@ -211,10 +216,40 @@ export function activate(context: vscode.ExtensionContext) {
   const caseTreeView = vscode.window.createTreeView('openfoam.caseExplorer', {
     treeDataProvider: caseTreeProvider,
     showCollapseAll: true,
+    dragAndDropController: caseTreeProvider,
   });
   const refreshCaseTreeCommand = vscode.commands.registerCommand(
     'openfoam.refreshCaseTree',
     () => caseTreeProvider.refresh(),
+  );
+
+  const openDashboardCommand = vscode.commands.registerCommand(
+    'openfoam.monitor.openDashboard',
+    async () => {
+      const caseRoot = caseTreeProvider.getCaseRoot()
+        ?? (vscode.window.activeTextEditor && findCaseRootFromPath(vscode.window.activeTextEditor.document.uri.fsPath))
+        ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!caseRoot) {
+        vscode.window.showInformationMessage('OpenFOAM: no case root found — open a file inside a case first.');
+        return;
+      }
+      await openDashboardForCase(caseRoot);
+    },
+  );
+
+  const parametricStudyCommand = vscode.commands.registerCommand(
+    'openfoam.parametricStudy.start',
+    () => runParametricStudyCommand(),
+  );
+
+  const dakotaExportCommand = vscode.commands.registerCommand(
+    'openfoam.parametricStudy.exportDakota',
+    () => runDakotaExportCommand(context),
+  );
+  // Dakota is a separately-installed native app (never a hard dependency) —
+  // only surface the export action in the palette once it's actually found.
+  void detectDakota().then(found =>
+    vscode.commands.executeCommand('setContext', 'openfoam.dakotaAvailable', found),
   );
 
   // Auto-refresh Case Explorer on file system changes
@@ -329,17 +364,27 @@ export function activate(context: vscode.ExtensionContext) {
             }
           } catch { /* */ }
         }
-        if (!picks.length) {
-          vscode.window.showInformationMessage('No geometry files found in constant/triSurface/');
-          return;
+        if (picks.length) {
+          const sel = await vscode.window.showQuickPick(picks, { placeHolder: 'Select geometry file to preview' });
+          if (sel) filePath = path.join(sel.description!, sel.label);
         }
-        const sel = await vscode.window.showQuickPick(picks, { placeHolder: 'Select geometry file to preview' });
-        if (!sel) return;
-        filePath = path.join(sel.description!, sel.label);
       }
-      if (!filePath) return;
+      // Always open the panel — even with nothing resolved yet, it has its
+      // own "Open geometry file…" button, so invoking the command bare
+      // never leaves the user looking at a blank tab with no way forward.
       const panel = GeometryPreviewPanel.createOrShow(context.extensionUri);
-      if (panel) panel.previewGeometry(filePath);
+      if (filePath) panel.previewGeometry(filePath);
+    },
+  );
+
+  const previewFieldCommand = vscode.commands.registerCommand(
+    'openfoam.previewField',
+    (filePathOrUri?: vscode.Uri | string) => {
+      const filePath = filePathOrUri instanceof vscode.Uri ? filePathOrUri.fsPath
+        : typeof filePathOrUri === 'string' ? filePathOrUri
+        : undefined;
+      const panel = FieldViewerPanel.createOrShow(context.extensionUri);
+      if (filePath) panel.previewField(filePath);
     },
   );
 
@@ -415,7 +460,11 @@ export function activate(context: vscode.ExtensionContext) {
     autoDetectDisposable,
     caseTreeView,
     refreshCaseTreeCommand,
+    openDashboardCommand,
+    parametricStudyCommand,
+    dakotaExportCommand,
     previewGeometryCommand,
+    previewFieldCommand,
     formatOnSaveDisposable,
     caseWatcher,
     findFileCommand,
@@ -441,16 +490,7 @@ export function deactivate(): Thenable<void> | undefined {
 /**
  * Find the OpenFOAM case root by walking up from a file path.
  */
-function findCaseRoot(filePath: string): string | null {
-  let dir = path.dirname(filePath);
-  for (let i = 0; i < 12; i++) {
-    if (fs.existsSync(path.join(dir, 'system', 'controlDict')) || fs.existsSync(path.join(dir, 'system', 'fvSchemes'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
-  return null;
-}
+const findCaseRoot = findCaseRootFromPath;
 
 /**
  * Check if a file path is inside an OpenFOAM case directory.

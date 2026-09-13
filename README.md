@@ -8,6 +8,35 @@ VS Code support for OpenFOAM case files: syntax highlighting, hover docs, comple
 
 ## What's New
 
+### 0.8.0
+
+- **Field-data viewer.** `.vtp` files, and `.vtk` files that actually
+  carry field data (`foamToVTK`/`postProcessing/**/VTK/*.vtk`), now open
+  in a dedicated viewer — color-by-array (per-component, not just
+  magnitude) with a legend, and solid/wireframe/points toggles — built
+  on `@kitware/vtk.js`. Plain geometry `.vtk`/.stl/.obj still get the
+  original fast 3D preview. Both viewers now also accept files dropped
+  in from the Explorer/Case Explorer, not just "Open file…".
+- **Geometry viewer: multi-layer + multi-select.** Open several STL/OBJ/
+  VTK files at once (or drag them in) and each becomes its own
+  toggleable, removable layer at its true relative scale/position; the
+  camera auto-fits to what's visible and no longer starts too zoomed in.
+- **Live run dashboard** (`OpenFOAM: Open Run Dashboard`, or the pulse
+  icon on the Case Explorer). Tails the case's solver log and charts
+  every field's residual live on a log scale, with a
+  converging/diverging/stalled badge per field and an info strip
+  (time step, Courant number, wall-clock). The chart has a
+  Plotly-Dash-style toolbar — Box Zoom/Pan mode toggle, zoom in/out,
+  Autoscale — and a per-field summary table + run stats once data is in,
+  not just a "Run finished." message.
+- **Parametric study** (`OpenFOAM: Start Parametric Study`). Sweep one
+  or more dictionary values across a grid — each combination becomes a
+  ready-to-run sibling case directory. Already have Dakota? `OpenFOAM:
+  Export Parametric Study to Dakota` writes a starting `dakota.in` +
+  driver script from the same parameters instead.
+- **"Did you mean" quick-fix** on unknown-key diagnostics — offers the
+  nearest real key in that file's schema, one click to apply.
+
 ### 0.7.3
 
 - **Search & Configure — `@` inline trigger.** Type `@` (or `@pimple`,
@@ -169,13 +198,14 @@ A dedicated OpenFOAM view in the Activity Bar that shows your case directory tre
 
 ### Geometry Preview
 
-Right-click an `.stl`, `.obj`, or `.vtk` file (in the Case Explorer or a `geometry { }`/`triSurface` reference) and choose **OpenFOAM: Preview Geometry (3D)** to open an interactive 3D viewer.
+Right-click an `.stl`, `.obj`, or `.vtk` file (in the Case Explorer or a `geometry { }`/`triSurface` reference) and choose **OpenFOAM: Preview Geometry (3D)** to open an interactive 3D viewer. "Add geometry layer…" accepts multiple files at once, and files can also be dragged in directly from the Explorer or Case Explorer — each one becomes its own toggleable layer, kept at its true relative scale and position, with the camera auto-fitting to whatever's visible.
 
 Viewer controls:
 
 - Left drag: rotate
 - Right drag or `Shift` + drag: pan
 - Mouse wheel: zoom
+- Layer chips: click to show/hide, `×` to remove, "Clear All" to reset
 
 ### Auto-Detection
 
@@ -189,6 +219,10 @@ Files in `system/`, `constant/`, and time directories such as `0/` or `1/` are d
 |---------|-------------|
 | `OpenFOAM: Search & Configure (Insert Block)` | Open the staging tab: pick a feature, edit the draft block, choose a target, Write (also on `Ctrl+Alt+O` / `Cmd+Alt+O`; the `?` inline trigger is the quicker path) |
 | `OpenFOAM: Preview Geometry (3D)` | Open a geometry file (STL/OBJ/VTK) in the 3D viewer |
+| `OpenFOAM: Preview Field Data (VTK)` | Open a `.vtk`/`.vtp` file with field data — color-by-array, legend, wireframe/points |
+| `OpenFOAM: Open Run Dashboard` | Live-tail the case's solver log — residual chart, Courant/execution-time info |
+| `OpenFOAM: Start Parametric Study` | Sweep dictionary values across a grid into ready-to-run sibling case directories |
+| `OpenFOAM: Export Parametric Study to Dakota` | Same sweep parameters, as a `dakota.in` + driver script (only shown if `dakota` is on PATH) |
 | `OpenFOAM: Set Language Mode` | Manually apply OpenFOAM language to the active file |
 | `OpenFOAM: Rebuild Keyword Database` | Re-run extraction scripts against an OpenFOAM source tree |
 | `OpenFOAM: Show Scheme Documentation` | Browse scheme docs via quick-pick |
@@ -255,7 +289,11 @@ src/
   treeSitter/                        # tree-sitter parsing, schema-driven diagnostics, semantic tokens
   scaffold/                          # "Search & Configure" `@` insert engine
   docs/                              # `?` cpp.openfoam.org lookup + hover
+  monitor/                           # Live residual/run dashboard (log tail + chart)
+  parametric/                        # Parametric-study sweep engine + Dakota export
+  shared/                            # Small utilities shared across the above (case root, edit distance)
   workflow/GeometryPreviewPanel.ts   # Standalone 3D geometry preview
+  workflow/FieldViewerPanel.ts       # VTK field-data viewer (color-by-array)
   providers/
     OpenFOAMDocumentSymbolProvider.ts  # Outline view
     OpenFOAMCodeLensProvider.ts        # Inlay hints / boolean toggles

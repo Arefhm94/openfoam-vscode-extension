@@ -8,14 +8,145 @@ const axCtx      = axesCanvas?.getContext('2d') ?? null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
 let renderer: THREE.WebGLRenderer | null = null;
-let mesh: THREE.Mesh | null = null;
 let ready = false;
 const target = new THREE.Vector3(0, 0, 0);
+
+// ── Multi-geometry layers ───────────────────────────────────────
+// Each opened file becomes its own layer — kept in its native scale/
+// position (not individually re-centered/rescaled, unlike the single-
+// geometry thumbnail path below) so multiple case parts line up exactly
+// as they do on disk; the camera auto-fits to all of them combined.
+interface Layer { id: number; name: string; mesh: THREE.Mesh; visible: boolean }
+let layers: Layer[] = [];
+let nextLayerId = 1;
+const LAYER_COLORS = [0x4db8ff, 0xff8a4d, 0x4dff9e, 0xff4d94, 0xc74dff, 0xffe14d, 0x4dfff2, 0xff4d4d];
+const layersEl = document.getElementById('layers');
+
+function renderLayerList(): void {
+  if (!layersEl) return;
+  layersEl.innerHTML = '';
+  for (const l of layers) {
+    const chip = document.createElement('span');
+    chip.className = 'layer-chip' + (l.visible ? '' : ' layer-hidden');
+
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = '#' + (l.mesh.material as THREE.MeshPhongMaterial).color.getHexString();
+    chip.appendChild(swatch);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = l.name;
+    nameSpan.title = 'Click to toggle visibility';
+    nameSpan.style.cursor = 'pointer';
+    nameSpan.addEventListener('click', () => {
+      l.visible = !l.visible;
+      l.mesh.visible = l.visible;
+      renderLayerList();
+      renderer?.render(scene!, camera!);
+    });
+    chip.appendChild(nameSpan);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove layer';
+    removeBtn.addEventListener('click', () => removeLayer(l.id));
+    chip.appendChild(removeBtn);
+
+    layersEl.appendChild(chip);
+  }
+}
+
+function updateLayerLabel(): void {
+  if (!layers.length) { geoLabel.textContent = 'No geometry file open'; return; }
+  geoLabel.textContent = `${layers.length} layer${layers.length === 1 ? '' : 's'}` +
+    '  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom  |  click a layer to toggle it';
+}
+
+/** Auto-fits the camera target/distance to the combined bounding box of
+ *  every visible layer, so adding/removing a layer keeps everything in
+ *  frame without each geometry fighting over its own normalized scale. */
+function fitCameraToLayers(): void {
+  if (!layers.length) return;
+  const box = new THREE.Box3();
+  let any = false;
+  for (const l of layers) {
+    if (!l.visible) continue;
+    box.union(new THREE.Box3().setFromObject(l.mesh));
+    any = true;
+  }
+  if (!any) return;
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+  target.copy(center);
+  sph.r = maxDim * 1.8;
+  // These used to be fixed (0.3–50, near 0.01, far 1000) back when every
+  // geometry was individually re-normalized to a ~2-unit box. Now that
+  // layers keep their real-world scale (needed so multiple parts line up
+  // correctly), a fixed zoom/clip range is wrong in either direction: a
+  // small part (millimeters) would clip through the near plane, a large
+  // one (hundreds of metres) could sit past the far plane or get clamped
+  // to an unusably close zoom the instant the wheel is touched. Scale
+  // both to the geometry actually loaded.
+  zoomMin = maxDim * 0.02;
+  zoomMax = maxDim * 60;
+  if (camera) {
+    camera.near = Math.max(maxDim / 5000, 1e-6);
+    camera.far = Math.max(maxDim * 200, 1000);
+    camera.updateProjectionMatrix();
+  }
+  updateCamera();
+}
+
+function addLayer(fileName: string, geo: THREE.BufferGeometry): void {
+  init();
+  document.getElementById('empty-state')?.style.setProperty('display', 'none');
+  const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+  const mat = new THREE.MeshPhongMaterial({ color, specular: 0x334455, shininess: 40, side: THREE.DoubleSide });
+  const layerMesh = new THREE.Mesh(geo, mat);
+  scene!.add(layerMesh);
+  layers.push({ id: nextLayerId++, name: fileName, mesh: layerMesh, visible: true });
+  renderLayerList();
+  fitCameraToLayers();
+  updateLayerLabel();
+}
+
+function removeLayer(id: number): void {
+  const idx = layers.findIndex(l => l.id === id);
+  if (idx < 0) return;
+  const [l] = layers.splice(idx, 1);
+  scene?.remove(l.mesh);
+  l.mesh.geometry.dispose();
+  (l.mesh.material as THREE.Material).dispose();
+  renderLayerList();
+  if (layers.length) fitCameraToLayers();
+  else document.getElementById('empty-state')?.style.setProperty('display', 'flex');
+  updateLayerLabel();
+  renderer?.render(scene!, camera!);
+}
+
+function clearAllLayers(): void {
+  for (const l of layers) {
+    scene?.remove(l.mesh);
+    l.mesh.geometry.dispose();
+    (l.mesh.material as THREE.Material).dispose();
+  }
+  layers = [];
+  renderLayerList();
+  document.getElementById('empty-state')?.style.setProperty('display', 'flex');
+  updateLayerLabel();
+  renderer?.render(scene!, camera!);
+}
 
 // Z-up spherical orbit: phi=polar from Z, theta=azimuth
 const sph = { theta: Math.PI / 4, phi: Math.PI / 3, r: 3 };
 let isDown = false, lx = 0, ly = 0;
 let dragMode: 'rotate' | 'pan' = 'rotate';
+// Rescaled by fitCameraToLayers() to the actual loaded geometry's size —
+// see the comment there for why this can no longer be a fixed range.
+let zoomMin = 0.3, zoomMax = 50;
 
 function updateCamera() {
   if (!camera) return;
@@ -84,7 +215,7 @@ function init() {
     updateCamera();
   });
   geoCanvas.addEventListener('wheel', e => {
-    sph.r = Math.max(0.3, Math.min(50, sph.r * (e.deltaY > 0 ? 1.1 : 0.9)));
+    sph.r = Math.max(zoomMin, Math.min(zoomMax, sph.r * (e.deltaY > 0 ? 1.1 : 0.9)));
     updateCamera();
     e.preventDefault();
   }, { passive: false });
@@ -145,7 +276,7 @@ function b64ToBytes(b64: string): Uint8Array {
   return u;
 }
 
-function parseSTL(bytes: Uint8Array, isBinary: boolean): THREE.BufferGeometry {
+function parseSTL(bytes: Uint8Array, isBinary: boolean, normalize = true): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
 
   if (isBinary) {
@@ -178,7 +309,7 @@ function parseSTL(bytes: Uint8Array, isBinary: boolean): THREE.BufferGeometry {
     geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(nrm), 3));
   }
 
-  normalizeGeometry(geo);
+  if (normalize) normalizeGeometry(geo);
   return geo;
 }
 
@@ -194,7 +325,7 @@ function normalizeGeometry(geo: THREE.BufferGeometry): void {
   geo.scale(s, s, s);
 }
 
-function parseOBJ(bytes: Uint8Array): THREE.BufferGeometry {
+function parseOBJ(bytes: Uint8Array, normalize = true): THREE.BufferGeometry {
   const text = new TextDecoder().decode(bytes);
   const pos: number[] = [], nrm: number[] = [], idx: number[] = [];
   const v: number[][] = [], vn: number[][] = [];
@@ -224,11 +355,12 @@ function parseOBJ(bytes: Uint8Array): THREE.BufferGeometry {
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
   if (nrm.length) geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nrm), 3));
   geo.setIndex(idx);
-  normalizeGeometry(geo);
+  if (!nrm.length) geo.computeVertexNormals(); // OBJ had no `vn` lines
+  if (normalize) normalizeGeometry(geo);
   return geo;
 }
 
-function parseVTK(bytes: Uint8Array): THREE.BufferGeometry {
+function parseVTK(bytes: Uint8Array, normalize = true): THREE.BufferGeometry {
   const text = new TextDecoder().decode(bytes);
   const lines = text.split('\n');
   const pos: number[] = [];
@@ -251,14 +383,14 @@ function parseVTK(bytes: Uint8Array): THREE.BufferGeometry {
   if (i >= lines.length) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
-    normalizeGeometry(geo);
+    if (normalize) normalizeGeometry(geo);
     return geo;
   }
   const polyMatch = lines[i].match(/(POLYGONS|TRIANGLE_STRIP)\s+(\d+)\s+(\d+)/);
   if (!polyMatch) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
-    normalizeGeometry(geo);
+    if (normalize) normalizeGeometry(geo);
     return geo;
   }
   i++;
@@ -282,7 +414,8 @@ function parseVTK(bytes: Uint8Array): THREE.BufferGeometry {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-  normalizeGeometry(geo);
+  geo.computeVertexNormals(); // legacy VTK POLYGONS carry no normals of their own
+  if (normalize) normalizeGeometry(geo);
   return geo;
 }
 
@@ -341,40 +474,26 @@ function renderMiniGeo(imgEl: HTMLImageElement, dataBase64: string, isBinary: bo
 window.addEventListener('message', (ev: MessageEvent) => {
   const msg = ev.data;
   if (msg.command === 'previewGeometry') {
-    init();
-    geoLabel.textContent = msg.fileName || '';
     try {
       const bytes = b64ToBytes(msg.dataBase64);
       const ext = (msg.fileName || '').toLowerCase();
+      // Loaded in native scale/position (no per-file normalize) so
+      // multiple layers line up the way they do on disk; addLayer()
+      // auto-fits the camera to all of them combined.
       let geo: THREE.BufferGeometry;
       if (ext.endsWith('.obj')) {
-        geo = parseOBJ(bytes);
+        geo = parseOBJ(bytes, false);
       } else if (ext.endsWith('.vtk')) {
-        geo = parseVTK(bytes);
+        geo = parseVTK(bytes, false);
       } else {
-        geo = parseSTL(bytes, msg.isBinary);
+        geo = parseSTL(bytes, msg.isBinary, false);
       }
-      if (mesh && scene) {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-      }
-      const mat = new THREE.MeshPhongMaterial({ color: 0x4db8ff, specular: 0x334455, shininess: 40, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(geo, mat);
-      scene!.add(mesh);
-
-      // Reset camera to auto-fit the new geometry
-      sph.theta = Math.PI / 4;
-      sph.phi = Math.PI / 3;
-      sph.r = 3;
-      target.set(0, 0, 0);
-      updateCamera();
-
-      const triCount = geo.attributes.position.count / 3;
-      geoLabel.textContent = msg.fileName + ' — ' + triCount.toLocaleString() + ' tri  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom';
+      addLayer(msg.fileName || `layer ${layers.length + 1}`, geo);
     } catch (err: any) {
       geoLabel.textContent = 'Parse error: ' + err.message;
     }
+  } else if (msg.command === 'clearLayers') {
+    clearAllLayers();
   } else if (msg.command === 'geoDataReady') {
     const img = document.getElementById(msg.canvasId) as HTMLImageElement | null;
     if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary, msg.ext);

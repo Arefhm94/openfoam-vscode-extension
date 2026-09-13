@@ -12,6 +12,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as path from "path";
 import { findCaseRoot, resolveInclude, resolveVariable, uriToPath, collectVariables, getCaseVariableNames } from './caseContext';
+import { closestMatch } from '../shared/levenshtein';
 import {
   scanCaseGeometry, getSurfaceNames,
   getBoundaryPatchNames, getSTLRegionsForSurface,
@@ -1919,6 +1920,7 @@ class OpenFOAMLanguageServer {
         message: d.message,
         severity: OpenFOAMLanguageServer.SCHEMA_SEVERITY[d.severity],
         source: 'openfoam',
+        ...(d.data ? { data: d.data } : {}),
       });
     }
   }
@@ -2224,6 +2226,24 @@ class OpenFOAMLanguageServer {
           diagnostics: [diag],
           edit: { changes: { [doc.uri]: [TextEdit.insert({ line: ln + 1, character: 0 }, '    value           uniform 0;\n')] } },
         });
+      }
+
+      // "Unknown key 'walldis'" → offer the closest real key from this
+      // context's schema, carried on the diagnostic as `data.candidates`
+      // (see schema.ts validateNode / pushSchemaDiags).
+      const unknownKeyM = /^Unknown key '(.+)'$/.exec(diag.message);
+      const candidates = (diag.data as { candidates?: string[] } | undefined)?.candidates;
+      if (unknownKeyM && candidates?.length) {
+        const suggestion = closestMatch(unknownKeyM[1], candidates);
+        if (suggestion) {
+          actions.push({
+            title: `Change to '${suggestion}'`,
+            kind: CodeActionKind.QuickFix,
+            diagnostics: [diag],
+            isPreferred: true,
+            edit: { changes: { [doc.uri]: [TextEdit.replace(diag.range, suggestion)] } },
+          });
+        }
       }
     }
 

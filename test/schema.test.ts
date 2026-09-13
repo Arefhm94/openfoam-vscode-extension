@@ -31,6 +31,13 @@ describe("validate() against the real controlDict schema", () => {
     expect(diags.some(d => d.severity === "warning" && d.message.includes("totallyBogusKeyword"))).toBe(true);
   });
 
+  it("carries the schema's real key names on an unknown-key diagnostic, for the 'did you mean' quick-fix", () => {
+    const tree = parseText(parser, 'stopat   endTime;\napplication  simpleFoam;\n');
+    const diags = validate(tree, controlDictSchema);
+    const unknown = diags.find(d => d.message.includes("stopat"));
+    expect(unknown?.data?.candidates).toContain("stopAt");
+  });
+
   it("flags a missing required key (stopAt)", () => {
     const tree = parseText(parser, 'application simpleFoam;\nstartFrom   startTime;\n');
     const diags = validate(tree, controlDictSchema);
