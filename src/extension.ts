@@ -9,6 +9,7 @@ import {
 } from "vscode-languageclient/node";
 import { GeometryPreviewPanel } from "./workflow/GeometryPreviewPanel";
 import { FieldViewerPanel } from "./workflow/FieldViewerPanel";
+import { VtkCustomEditorProvider } from "./workflow/VtkCustomEditorProvider";
 import { OpenFOAMDocumentSymbolProvider } from "./providers/OpenFOAMDocumentSymbolProvider";
 import {
   OpenFOAMInlayHintsProvider,
@@ -20,6 +21,7 @@ import { registerStagingTab } from "./scaffold/stagingTab";
 import { registerInlineScaffold } from "./scaffold/inlineComplete";
 import { registerDocsHelp } from "./docs/register";
 import { findCaseRootFromPath } from "./shared/caseRoot";
+import { looksLikeFieldData } from "./shared/vtkSniff";
 import { openDashboardForCase } from "./monitor/dashboardPanel";
 import { runParametricStudyCommand, runDakotaExportCommand } from "./parametric/runCommand";
 import { detectDakota } from "./parametric/dakotaExport";
@@ -223,6 +225,50 @@ export function activate(context: vscode.ExtensionContext) {
     () => caseTreeProvider.refresh(),
   );
 
+  // Drives the `∇` editor-title icon: only shown once an actual OpenFOAM
+  // case (a folder with `constant`/`system`) is detected, reusing the
+  // same detection the Case Explorer itself already does rather than
+  // re-walking the filesystem separately.
+  const updateCaseDetectedContext = () =>
+    vscode.commands.executeCommand('setContext', 'openfoam.caseDetected', !!caseTreeProvider.getCaseRoot());
+  updateCaseDetectedContext();
+  caseTreeProvider.onDidChangeTreeData(updateCaseDetectedContext);
+
+  const caseMenuCommand = vscode.commands.registerCommand('openfoam.caseMenu', async () => {
+    const caseRoot = caseTreeProvider.getCaseRoot() ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const choice = await vscode.window.showQuickPick(
+      [
+        { label: '$(eye) Load Geometries…', detail: 'Pick STL/OBJ/VTK files to preview in the 3D geometry viewer', id: 'geometry' as const },
+        { label: '$(graph-line) Postprocessing…', detail: 'Pick VTK/VTP field-data files (e.g. from postProcessing/) to preview', id: 'postprocessing' as const },
+      ],
+      { placeHolder: 'OpenFOAM Preview' },
+    );
+    if (!choice) return;
+
+    if (choice.id === 'geometry') {
+      const picked = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        filters: { 'Geometry files': ['stl', 'obj', 'vtk'] },
+        title: 'Load Geometries',
+        defaultUri: caseRoot ? vscode.Uri.file(path.join(caseRoot, 'constant', 'triSurface')) : undefined,
+      });
+      if (picked?.length) await vscode.commands.executeCommand('openfoam.preview', picked[0], picked);
+    } else {
+      // postProcessing is where foamToVTK / sample-surface output actually
+      // lands in a real case — default the dialog there when it exists.
+      const postProcDir = caseRoot ? path.join(caseRoot, 'postProcessing') : undefined;
+      const defaultUri = postProcDir && fs.existsSync(postProcDir) ? vscode.Uri.file(postProcDir)
+        : caseRoot ? vscode.Uri.file(caseRoot) : undefined;
+      const picked = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        filters: { 'VTK field data': ['vtk', 'vtp'] },
+        title: 'Load Postprocessing VTK Files',
+        defaultUri,
+      });
+      if (picked?.length) await vscode.commands.executeCommand('openfoam.preview', picked[0], picked);
+    }
+  });
+
   const openDashboardCommand = vscode.commands.registerCommand(
     'openfoam.monitor.openDashboard',
     async () => {
@@ -342,7 +388,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   const previewGeometryCommand = vscode.commands.registerCommand(
     'openfoam.previewGeometry',
-    async (filePathOrUri?: vscode.Uri | string) => {
+    // VS Code invokes a context-menu command as (clickedUri, allSelectedUris)
+    // when more than one item is selected — the second param is how a
+    // multi-select "Open with OpenFOAM 3D Geometry" loads every selected
+    // file as its own layer in one go, instead of only the one you
+    // right-clicked.
+    async (filePathOrUri?: vscode.Uri | string, allUris?: vscode.Uri[]) => {
       let filePath: string | undefined;
       if (filePathOrUri instanceof vscode.Uri) {
         filePath = filePathOrUri.fsPath;
@@ -373,7 +424,11 @@ export function activate(context: vscode.ExtensionContext) {
       // own "Open geometry file…" button, so invoking the command bare
       // never leaves the user looking at a blank tab with no way forward.
       const panel = GeometryPreviewPanel.createOrShow(context.extensionUri);
-      if (filePath) panel.previewGeometry(filePath);
+      if (allUris && allUris.length > 1) {
+        for (const uri of allUris) panel.previewGeometry(uri.fsPath);
+      } else if (filePath) {
+        panel.previewGeometry(filePath);
+      }
     },
   );
 
@@ -385,6 +440,52 @@ export function activate(context: vscode.ExtensionContext) {
         : undefined;
       const panel = FieldViewerPanel.createOrShow(context.extensionUri);
       if (filePath) panel.previewField(filePath);
+    },
+  );
+
+  // Single public entry point for both preview panels — "OpenFOAM
+  // Preview" as one feature, per the user's explicit request, even
+  // though it still runs two different rendering engines underneath
+  // (three.js for plain geometry, vtk.js for field data): auto-detects
+  // per file and routes each to the right panel, so callers (the
+  // Explorer context menu, the Case Explorer, drag-and-drop onto the
+  // custom editor) don't need to know or duplicate that detection
+  // themselves. `previewGeometry`/`previewField` stay registered
+  // (hidden from the Command Palette) since this just delegates to them.
+  const previewCommand = vscode.commands.registerCommand(
+    'openfoam.preview',
+    async (filePathOrUri?: vscode.Uri | string, allUris?: vscode.Uri[]) => {
+      const uris = allUris && allUris.length > 1
+        ? allUris
+        : filePathOrUri instanceof vscode.Uri
+          ? [filePathOrUri]
+          : typeof filePathOrUri === 'string'
+            ? [vscode.Uri.file(filePathOrUri)]
+            : [];
+      if (!uris.length) {
+        // No file resolved — fall back to previewGeometry's own
+        // quickpick-from-triSurface flow rather than duplicating it.
+        await vscode.commands.executeCommand('openfoam.previewGeometry');
+        return;
+      }
+      const fieldUris: vscode.Uri[] = [];
+      const geometryUris: vscode.Uri[] = [];
+      for (const uri of uris) {
+        const ext = path.extname(uri.fsPath).toLowerCase();
+        const isField = ext === '.vtp' || (ext === '.vtk' && looksLikeFieldData(uri.fsPath));
+        (isField ? fieldUris : geometryUris).push(uri);
+      }
+      if (geometryUris.length) {
+        const panel = GeometryPreviewPanel.createOrShow(context.extensionUri);
+        for (const uri of geometryUris) panel.previewGeometry(uri.fsPath);
+      }
+      if (fieldUris.length) {
+        // The field viewer shows one dataset at a time (mirrors the
+        // existing drag-and-drop behavior) — take the first if several
+        // field files were selected together.
+        const panel = FieldViewerPanel.createOrShow(context.extensionUri);
+        panel.previewField(fieldUris[0].fsPath);
+      }
     },
   );
 
@@ -460,11 +561,14 @@ export function activate(context: vscode.ExtensionContext) {
     autoDetectDisposable,
     caseTreeView,
     refreshCaseTreeCommand,
+    caseMenuCommand,
     openDashboardCommand,
     parametricStudyCommand,
     dakotaExportCommand,
     previewGeometryCommand,
     previewFieldCommand,
+    previewCommand,
+    VtkCustomEditorProvider.register(context),
     formatOnSaveDisposable,
     caseWatcher,
     findFileCommand,

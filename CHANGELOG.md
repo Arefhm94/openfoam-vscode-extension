@@ -49,6 +49,65 @@ parametric-study engine (with an optional Dakota export).
 - **Field viewer: drag & drop.** `.vtk`/`.vtp` files can now be dropped
   in from the Explorer or Case Explorer the same way as the geometry
   viewer, in addition to "Open file…".
+- **View controls panel** (both viewers). A compact corner overlay with
+  stepped rotate/pan compasses, zoom in/out, Fit (refit distance only)
+  and Reset (also restores a sane default direction), plus a wireframe
+  toggle (geometry viewer) or an orthographic/perspective toggle (field
+  viewer), and a screenshot button that saves the current view as a PNG
+  via a native save dialog.
+- **Interactive clip plane** (both viewers). Slice along X/Y/Z (or
+  flipped) with a position slider to look inside a case's geometry or a
+  sample surface instead of only seeing its outside — the field viewer
+  uses vtk.js's native `addClippingPlane`, the geometry viewer uses
+  three.js's per-material clipping planes shared across every layer.
+  Not capped (the cut shows the open shell, not a filled cross-section)
+  — a solid cap is a possible follow-up.
+- **`.vtk`/`.vtp` now open directly, no matter how you click them.**
+  Registered as a default custom editor: double-clicking any `.vtk`/
+  `.vtp` file — in VS Code's own Explorer, not just this extension's
+  Case Explorer — now opens it straight into the right viewer, same
+  auto-detection as before (field viewer for `.vtp` or a `.vtk` with
+  real POINT_DATA/CELL_DATA, plain 3D preview otherwise). ("Reopen
+  Editor With…" still offers the plain text editor.) This also fixed a
+  real detection bug: the field-data sniff only checked the first 8 KB
+  of the file, but in a legacy-VTK file POINT_DATA/CELL_DATA always
+  comes *after* the POINTS/POLYGONS section it describes — for any
+  real mesh (more than a few dozen points) that section starts well
+  past 8 KB, so every real field-data `.vtk` was silently misrouted to
+  the geometry viewer. The sniff now scans in bounded 1 MB chunks (up
+  to 16 MB) instead.
+- **Fixed the three real, separate reasons field-data `.vtk` files
+  rendered blank.** Chased with an actual headless-Chrome + WebGL render
+  this round (not just source-reading), which uncovered three
+  independent, previously-undiscovered bugs stacked on top of each
+  other — every earlier lighting/normals fix was correct but addressed
+  none of these:
+  1. **Binary VTK support.** Real HELYX/OpenFOAM `sampleSurface`/
+     `postProcessing/**/VTK` output defaults to the legacy **BINARY**
+     format, not ASCII. `src/webview/vtkParse.ts` previously only
+     understood ASCII (built and tested against synthetic fixtures
+     only), so every real field-data file silently failed to parse.
+     Added a binary-aware parser alongside the existing ASCII one
+     (big-endian, as the legacy format always is).
+  2. **A flexbox circular-sizing bug.** The field/geometry viewers'
+     `flex:1` containers had no `min-height:0`, so a canvas whose
+     `width`/`height` *attributes* get set programmatically (both
+     three.js and vtk.js do this) could force its own ancestor chain to
+     grow to match it — the container ends up sized by its child
+     instead of the other way around, breaking layout in a way that
+     doesn't show up until real content is loaded.
+  3. **A bad default camera direction for near-planar datasets.**
+     `renderer.resetCamera()` only fits *distance* to the bounds — it
+     preserves whatever direction the camera already had. A sample
+     surface is flat in one axis; if the default direction happened to
+     look straight down that axis, the whole plane projected to a
+     sliver with ~zero screen-space area. The new default view now
+     looks predominantly *along* the dataset's thinnest axis instead
+     (`src/webview/cameraOrient.ts`, unit-tested), which is what
+     actually shows a thin slice face-on.
+  Verified end-to-end against a real 126k-point/257k-cell example file,
+  confirmed by a real rendered screenshot showing the correctly
+  colored field, not just passing metadata checks.
 - **Live residual & run dashboard** (`OpenFOAM: Open Run Dashboard`, also
   in the Case Explorer's title bar). Tails the case's solver log
   incrementally (no re-reading multi-MB files on every tick), charts
@@ -87,6 +146,70 @@ parametric-study engine (with an optional Dakota export).
 - **"Did you mean" quick-fix.** An `Unknown key 'walldis'`-style
   diagnostic now offers a one-click fix to the nearest real key in that
   file's schema (plain edit-distance, no ML).
+- **Viewer controls overhauled per direct feedback.** Both viewers:
+  left-drag now rotates around whichever point you clicked (not a fixed
+  scene center), right-drag pans, and the scroll-wheel zoom is
+  significantly gentler than before. The nav panel's separate zoom
+  in/out buttons were removed (reported as not useful — scroll or the
+  Fit/Reset buttons cover it). The field viewer's legend is now a
+  compact **vertical** color bar (bottom-right, a reasonable fixed
+  height, not the old full-width horizontal strip) with a **colormap
+  picker** — Cool→Warm (the previous fixed default), Jet, Viridis,
+  Plasma, and Grayscale.
+- **Language server self-heals from a tree-sitter WASM crash.** A rare
+  `RuntimeError: memory access out of bounds` in the bundled
+  `web-tree-sitter` parser (root cause not reproduced against any
+  synthetic input tried) previously left the server permanently unable
+  to parse anything — every document, not just the one that triggered
+  it — because `web-tree-sitter` runs on one process-wide WebAssembly
+  module shared by every `Parser` instance; once its linear memory
+  traps, it stays corrupted for the rest of that process's life no
+  matter how many new `Parser` objects get created. The server now
+  detects this and exits cleanly, which `vscode-languageclient`'s
+  default (unmodified) error handler treats as a normal crash and
+  restarts from — a genuinely fresh process, and therefore a genuinely
+  fresh WASM instance — instead of leaving hover/completion/
+  diagnostics broken for the rest of the session.
+- **`.stl`/`.obj` now open directly too**, the same default-custom-editor
+  treatment `.vtk`/`.vtp` already got — double-clicking one anywhere in
+  VS Code (not just the Case Explorer) opens the 3D geometry viewer
+  straight away instead of raw text. ("Reopen Editor With…" still
+  offers the plain text editor.)
+- **Multi-select "Open with OpenFOAM 3D Geometry"**: select several
+  `.stl`/`.obj`/`.vtk` files in VS Code's own Explorer, right-click, and
+  every selected file loads as its own layer in one go — not just the
+  one you clicked. (The right-click menu itself, on any Explorer file —
+  not just the Case Explorer — was also missing before this; both
+  `openfoam.previewGeometry` and `openfoam.previewField` are now on it.)
+- **Consolidated the clip-plane panel into the view-controls panel** on
+  both viewers, removing a separate floating overlay that sat right next
+  to the geometry viewer's axis gizmo and looked like a redundant second
+  "X/Y/Z" control living right beside it.
+- **"OpenFOAM Preview" is now one feature**, not two. A single command
+  (`openfoam.preview`, on the Explorer right-click menu and used
+  internally everywhere) auto-detects field-vs-geometry per file and
+  opens the right one of the two viewers — you no longer need to know
+  which viewer a file belongs in, or pick between two separate
+  "Preview Geometry" / "Preview Field Data" menu entries. Drag-and-drop
+  onto either viewer, and the "Open file…" flow's drops, now route the
+  same way, so dropping a field-data file onto the geometry viewer (or
+  a plain mesh onto the field viewer) opens it correctly instead of
+  failing silently. (The two underlying viewers are still separate
+  three.js/vtk.js engines internally — see the roadmap note below.)
+- **Field viewer legend moved to the top-left** (was bottom-right,
+  crowding the view-controls panel there).
+- **A real loading state** for both viewers: a spinner + "Loading
+  &lt;file&gt;…" overlay now shows from the moment a file is chosen
+  until it's actually parsed and rendered, replacing the previous
+  behavior of the "Add geometry layer…" / "Open a file…" empty-state
+  staying on screen the whole time — which, for a larger file, looked
+  like nothing had happened rather than that it was working.
+- **`∇` case menu.** A nabla icon appears in the editor title bar
+  whenever the current workspace looks like an OpenFOAM case (a folder
+  with `constant`/`system`) — click it for **Load Geometries…**
+  (multi-select STL/OBJ/VTK) or **Postprocessing…** (multi-select
+  VTK/VTP, defaulting to the case's `postProcessing/` folder when one
+  exists), both routed through the unified `openfoam.preview` command.
 
 ### Changed
 

@@ -59,7 +59,7 @@ function renderLayerList(): void {
 function updateLayerLabel(): void {
   if (!layers.length) { geoLabel.textContent = 'No geometry file open'; return; }
   geoLabel.textContent = `${layers.length} layer${layers.length === 1 ? '' : 's'}` +
-    '  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom  |  click a layer to toggle it';
+    '  |  left-drag rotate (pivots on what you click)  |  right-drag pan  |  scroll zoom  |  click a layer to toggle it';
 }
 
 /** Auto-fits the camera target/distance to the combined bounding box of
@@ -100,17 +100,82 @@ function fitCameraToLayers(): void {
   updateCamera();
 }
 
+// ── Clip plane: X/Y/Z (or flipped), position slider — three.js supports
+// real per-material clipping (`renderer.localClippingEnabled` +
+// `material.clippingPlanes`), one shared `THREE.Plane` applied to every
+// layer's material. Not capped (the removed side just shows the open
+// shell, visible thanks to the existing `DoubleSide` materials) — a
+// filled cross-section needs a separate cap-geometry pass, deferred.
+const clipPlaneThree = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+let clipAxis: 0 | 1 | 2 = 0;
+let clipFlipped = false;
+let clipEnabled = false;
+
+function updateClipPlane(): void {
+  if (!layers.length) return;
+  const box = new THREE.Box3();
+  let any = false;
+  for (const l of layers) { if (!l.visible) continue; box.union(new THREE.Box3().setFromObject(l.mesh)); any = true; }
+  if (!any) return;
+  const axisKey = (['x', 'y', 'z'] as const)[clipAxis];
+  const lo = box.min[axisKey], hi = box.max[axisKey];
+  const slider = document.getElementById('clip-slider') as HTMLInputElement | null;
+  const t = slider ? Number(slider.value) / 100 : 0.5;
+  const pos = lo + (hi - lo) * t;
+  const normal = new THREE.Vector3(0, 0, 0);
+  normal[axisKey] = clipFlipped ? -1 : 1;
+  // Plane equation normal·p + constant = 0; three.js keeps the side where
+  // normal·p + constant >= 0. For normal=+1 on this axis, keeping p>=pos
+  // needs constant=-pos; for normal=-1, keeping p<=pos needs constant=+pos.
+  clipPlaneThree.normal.copy(normal);
+  clipPlaneThree.constant = clipFlipped ? pos : -pos;
+  renderer?.render(scene!, camera!);
+}
+
+function setClipEnabled(enabled: boolean): void {
+  clipEnabled = enabled;
+  document.getElementById('clip-toggle')?.classList.toggle('active', enabled);
+  for (const l of layers) {
+    (l.mesh.material as THREE.Material).clippingPlanes = enabled ? [clipPlaneThree] : [];
+  }
+  if (enabled) updateClipPlane();
+  else renderer?.render(scene!, camera!);
+}
+
+function setClipAxis(axis: 0 | 1 | 2): void {
+  clipAxis = axis;
+  ['clip-axis-x', 'clip-axis-y', 'clip-axis-z'].forEach((id, i) =>
+    document.getElementById(id)?.classList.toggle('active', i === axis));
+  if (clipEnabled) updateClipPlane();
+}
+
+function toggleClipFlip(): void {
+  clipFlipped = !clipFlipped;
+  document.getElementById('clip-flip')?.classList.toggle('active', clipFlipped);
+  if (clipEnabled) updateClipPlane();
+}
+
+document.getElementById('clip-toggle')?.addEventListener('click', () => setClipEnabled(!clipEnabled));
+document.getElementById('clip-axis-x')?.addEventListener('click', () => setClipAxis(0));
+document.getElementById('clip-axis-y')?.addEventListener('click', () => setClipAxis(1));
+document.getElementById('clip-axis-z')?.addEventListener('click', () => setClipAxis(2));
+document.getElementById('clip-flip')?.addEventListener('click', toggleClipFlip);
+document.getElementById('clip-slider')?.addEventListener('input', () => { if (clipEnabled) updateClipPlane(); });
+setClipAxis(0);
+
 function addLayer(fileName: string, geo: THREE.BufferGeometry): void {
   init();
   document.getElementById('empty-state')?.style.setProperty('display', 'none');
   const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
   const mat = new THREE.MeshPhongMaterial({ color, specular: 0x334455, shininess: 40, side: THREE.DoubleSide });
+  if (clipEnabled) mat.clippingPlanes = [clipPlaneThree];
   const layerMesh = new THREE.Mesh(geo, mat);
   scene!.add(layerMesh);
   layers.push({ id: nextLayerId++, name: fileName, mesh: layerMesh, visible: true });
   renderLayerList();
   fitCameraToLayers();
   updateLayerLabel();
+  if (clipEnabled) updateClipPlane(); // new layer changed the combined bounds
 }
 
 function removeLayer(id: number): void {
@@ -170,6 +235,37 @@ function panCamera(dx: number, dy: number) {
   target.add(pan);
 }
 
+// ── Rotate around the clicked point ─────────────────────────────────
+// Raycast on rotate-drag start, and if it hits visible geometry, re-aim
+// the orbit at that point instead of the scene's overall center — the
+// camera's own position doesn't move (only `camera.lookAt(target)`
+// changes), so this is a "look at what you clicked" snap, not a
+// teleport; subsequent drag then orbits around that point.
+const raycaster = new THREE.Raycaster();
+function pickPoint(clientX: number, clientY: number): THREE.Vector3 | null {
+  if (!camera) return null;
+  const rect = geoCanvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  raycaster.setFromCamera(ndc, camera);
+  const meshes = layers.filter(l => l.visible).map(l => l.mesh);
+  const hits = raycaster.intersectObjects(meshes, false);
+  return hits.length ? hits[0].point : null;
+}
+
+function retargetTo(point: THREE.Vector3): void {
+  if (!camera) return;
+  const offset = camera.position.clone().sub(point);
+  const r = offset.length();
+  if (r < 1e-9) return;
+  target.copy(point);
+  sph.r = r;
+  sph.phi = Math.acos(Math.max(-1, Math.min(1, offset.z / r)));
+  sph.theta = Math.atan2(offset.y, offset.x);
+}
+
 function init() {
   if (ready) return;
   const w = geoCanvas.clientWidth  || 800;
@@ -184,6 +280,7 @@ function init() {
   renderer = new THREE.WebGLRenderer({ canvas: geoCanvas, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(w, h, false);
+  renderer.localClippingEnabled = true;
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.5));
   const d1 = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -198,7 +295,11 @@ function init() {
     isDown = true;
     lx = e.clientX;
     ly = e.clientY;
-    dragMode = (e.button === 2 || e.shiftKey) ? 'pan' : 'rotate';
+    dragMode = e.button === 2 ? 'pan' : 'rotate';
+    if (dragMode === 'rotate') {
+      const p = pickPoint(e.clientX, e.clientY);
+      if (p) retargetTo(p);
+    }
   });
   window.addEventListener('mouseup', () => isDown = false);
   window.addEventListener('mousemove', e => {
@@ -215,7 +316,11 @@ function init() {
     updateCamera();
   });
   geoCanvas.addEventListener('wheel', e => {
-    sph.r = Math.max(zoomMin, Math.min(zoomMax, sph.r * (e.deltaY > 0 ? 1.1 : 0.9)));
+    // Exponential in the raw wheel delta rather than a fixed ±10% per
+    // tick — smooth on both notched wheels and trackpads, and
+    // deliberately gentle (the old fixed-step feel was reported as too
+    // sensitive).
+    sph.r = Math.max(zoomMin, Math.min(zoomMax, sph.r * Math.exp(e.deltaY * 0.0006)));
     updateCamera();
     e.preventDefault();
   }, { passive: false });
@@ -470,28 +575,110 @@ function renderMiniGeo(imgEl: HTMLImageElement, dataBase64: string, isBinary: bo
   }
 }
 
+// ── Nav panel: stepped rotate/pan/zoom, fit, reset, wireframe, screenshot ──
+const ROTATE_STEP = Math.PI / 12; // 15°
+const PAN_STEP_PX = 40;
+
+function rotateStep(dTheta: number, dPhi: number): void {
+  sph.theta += dTheta;
+  sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + dPhi));
+  updateCamera();
+}
+
+function resetView(): void {
+  sph.theta = Math.PI / 4;
+  sph.phi = Math.PI / 3;
+  fitCameraToLayers();
+}
+
+let wireframeOn = false;
+function toggleWireframe(): void {
+  wireframeOn = !wireframeOn;
+  for (const l of layers) {
+    (l.mesh.material as THREE.MeshPhongMaterial).wireframe = wireframeOn;
+  }
+  document.getElementById('nav-wireframe')?.classList.toggle('active', wireframeOn);
+  renderer?.render(scene!, camera!);
+}
+
+function takeScreenshot(): void {
+  if (!renderer || !scene || !camera) return;
+  renderer.render(scene, camera); // ensure the buffer holds the latest frame
+  const dataUrl = geoCanvas.toDataURL('image/png');
+  (window as any).vsApi?.postMessage({ command: 'saveScreenshot', dataBase64: dataUrl.split(',')[1] });
+}
+
+const NAV_BUTTONS: [string, () => void][] = [
+  ['nav-rot-left', () => rotateStep(ROTATE_STEP, 0)],
+  ['nav-rot-right', () => rotateStep(-ROTATE_STEP, 0)],
+  ['nav-tilt-up', () => rotateStep(0, -ROTATE_STEP)],
+  ['nav-tilt-down', () => rotateStep(0, ROTATE_STEP)],
+  ['nav-pan-left', () => { panCamera(-PAN_STEP_PX, 0); updateCamera(); }],
+  ['nav-pan-right', () => { panCamera(PAN_STEP_PX, 0); updateCamera(); }],
+  ['nav-pan-up', () => { panCamera(0, -PAN_STEP_PX); updateCamera(); }],
+  ['nav-pan-down', () => { panCamera(0, PAN_STEP_PX); updateCamera(); }],
+  ['nav-fit', () => fitCameraToLayers()],
+  ['nav-reset', resetView],
+  ['nav-wireframe', toggleWireframe],
+  ['nav-screenshot', takeScreenshot],
+];
+for (const [id, fn] of NAV_BUTTONS) {
+  document.getElementById(id)?.addEventListener('click', fn);
+}
+
+// ── Loading state ────────────────────────────────────────────
+// Shown from the moment a file is chosen until it's actually parsed and
+// added as a layer — previously the "Add geometry layer…" empty-state
+// stayed on screen for that whole window, which for a large file looked
+// like nothing had happened. Parsing/building the mesh is synchronous
+// (single-threaded JS), so simply showing the overlay and immediately
+// running that work in the same tick would never let the browser paint
+// the overlay first — deferred one frame (double rAF, which reliably
+// lands after the next paint) so the spinner is actually visible before
+// the heavy work blocks the thread.
+const loadingEl = document.getElementById('loading-state');
+const loadingTextEl = document.getElementById('loading-text');
+function showLoading(fileName?: string): void {
+  if (loadingTextEl) loadingTextEl.textContent = fileName ? `Loading ${fileName}…` : 'Loading…';
+  if (loadingEl) loadingEl.style.display = 'flex';
+  document.getElementById('empty-state')?.style.setProperty('display', 'none');
+}
+function hideLoading(): void {
+  if (loadingEl) loadingEl.style.display = 'none';
+}
+function afterPaint(fn: () => void): void {
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+}
+
 // ── Message handler ────────────────────────────────────────────
 window.addEventListener('message', (ev: MessageEvent) => {
   const msg = ev.data;
-  if (msg.command === 'previewGeometry') {
-    try {
-      const bytes = b64ToBytes(msg.dataBase64);
-      const ext = (msg.fileName || '').toLowerCase();
-      // Loaded in native scale/position (no per-file normalize) so
-      // multiple layers line up the way they do on disk; addLayer()
-      // auto-fits the camera to all of them combined.
-      let geo: THREE.BufferGeometry;
-      if (ext.endsWith('.obj')) {
-        geo = parseOBJ(bytes, false);
-      } else if (ext.endsWith('.vtk')) {
-        geo = parseVTK(bytes, false);
-      } else {
-        geo = parseSTL(bytes, msg.isBinary, false);
+  if (msg.command === 'loading') {
+    showLoading(msg.fileName);
+  } else if (msg.command === 'previewGeometry') {
+    showLoading(msg.fileName);
+    afterPaint(() => {
+      try {
+        const bytes = b64ToBytes(msg.dataBase64);
+        const ext = (msg.fileName || '').toLowerCase();
+        // Loaded in native scale/position (no per-file normalize) so
+        // multiple layers line up the way they do on disk; addLayer()
+        // auto-fits the camera to all of them combined.
+        let geo: THREE.BufferGeometry;
+        if (ext.endsWith('.obj')) {
+          geo = parseOBJ(bytes, false);
+        } else if (ext.endsWith('.vtk')) {
+          geo = parseVTK(bytes, false);
+        } else {
+          geo = parseSTL(bytes, msg.isBinary, false);
+        }
+        addLayer(msg.fileName || `layer ${layers.length + 1}`, geo);
+      } catch (err: any) {
+        geoLabel.textContent = 'Parse error: ' + err.message;
+      } finally {
+        hideLoading();
       }
-      addLayer(msg.fileName || `layer ${layers.length + 1}`, geo);
-    } catch (err: any) {
-      geoLabel.textContent = 'Parse error: ' + err.message;
-    }
+    });
   } else if (msg.command === 'clearLayers') {
     clearAllLayers();
   } else if (msg.command === 'geoDataReady') {
@@ -499,3 +686,9 @@ window.addEventListener('message', (ev: MessageEvent) => {
     if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary, msg.ext);
   }
 });
+
+// Tell the host we're ready to receive the initial file — postMessage()
+// doesn't queue, so a payload posted before this listener is attached
+// (e.g. an external <script src> tag still fetching over the network)
+// would otherwise be silently dropped.
+(window as any).vsApi?.postMessage({ command: 'ready' });

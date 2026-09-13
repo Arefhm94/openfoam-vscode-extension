@@ -1720,3 +1720,749 @@ succeeds, 2.43 MB. Updated `CHANGELOG.md`, `README.md` for this round.
 browser/GUI available in this environment; the box-zoom drag math and
 the zoom-clamp fix are traced by hand against the same coordinate
 transforms already used elsewhere in each file, not visually confirmed.
+
+### 2026-09-13 — `.vtk`/`.vtp` open directly on click; found & fixed the real field-data-detection bug
+
+User: "when I click on a vtk file I expect openfoam extension [to]
+preview field data vtk directly[,] distinguish it and open[] it."
+
+**Two separate problems, both real.** (1) The Case Explorer already
+auto-distinguished field-data `.vtk` from plain geometry on click
+(`looksLikeFieldData()`, sniffing for `POINT_DATA`/`CELL_DATA`) — but
+that only covers this extension's *own* tree view. Double-clicking a
+`.vtk`/`.vtp` in VS Code's **built-in** Explorer (or via `File > Open`,
+or the global "recently opened" list) has always just opened it as raw
+text, since nothing registered a custom editor for those extensions.
+(2) Independently, the sniff itself had a real bug: it only read the
+first 8192 bytes. In a legacy-VTK file, `POINT_DATA`/`CELL_DATA` always
+comes *after* the `POINTS`/`POLYGONS` block it describes — for any real
+mesh with more than a few dozen points, that section starts well past
+8 KB. So field-data files weren't being silently *missed only in edge
+cases* — every realistically-sized field-data `.vtk` was misdetected as
+plain geometry, all the time. Confirmed with a synthetic 5000-point
+fixture in the new `test/vtkSniff.test.ts` (asserting the file is
+`> 8192` bytes before checking detection, so the test can't pass by
+accident).
+
+**Fix 1 — real detection.** Moved the sniff out of
+`OpenFOAMCaseTreeProvider.ts` into a new shared `src/shared/vtkSniff.ts`
+(so both the tree provider and the new custom editor use one
+implementation), and changed it from a single 8 KB read to a bounded
+scan in 1 MB chunks up to a 16 MB cap, carrying the last 32 bytes of
+each chunk forward so a match split across a chunk boundary isn't
+missed. Not a full-file read — a purely additive-sized `.vtk` could
+still be large — just enough headroom that the section describing a
+case's actual field data is reliably reached.
+
+**Fix 2 — a real default editor.** Added `VtkCustomEditorProvider.ts`
+implementing `vscode.CustomReadonlyEditorProvider`, registered in
+`package.json`'s new `contributes.customEditors` for `*.vtk`/`*.vtp`
+with `"priority": "default"` — VS Code now opens these files straight
+into the OpenFOAM viewer (geometry or field, same auto-detection) no
+matter which UI they're opened from; "Reopen Editor With…" still offers
+plain text if ever needed, since `default` priority doesn't remove the
+built-in editor, just stops being the default. To avoid duplicating the
+viewer HTML, extracted `GeometryPreviewPanel`'s and `FieldViewerPanel`'s
+`_buildHtml()` bodies into standalone `src/workflow/geometryHtml.ts` /
+`fieldHtml.ts` functions (`build{Geometry,Field}Html(webview,
+extensionUri)`), now shared by all three call sites (the two standalone
+panels + the new custom editor). The custom editor's "Open file…"/
+drag-drop actions in its header hand off to the existing standalone-panel
+commands rather than trying to swap the content of a tab that's bound to
+one fixed document.
+
+**Found and fixed a latent message-drop race while wiring this up** (the
+same class of bug the dashboard hit earlier this session): both
+standalone panels called `panel.previewGeometry()`/`previewField()`
+immediately after `createWebviewPanel()`, posting the initial payload
+before the webview's *external* `<script src="...">` bundle (geoViewer.js
+/fieldViewer.js, ~1.1-1.2 MB) had necessarily finished fetching+executing
+and attached its `message` listener — `postMessage()` doesn't queue,
+so on a slow enough load the first file could silently fail to render.
+This was always a possible bug for the standalone panels, but became
+far more likely to actually bite once the custom editor path calls
+`sendPayload()` the moment the panel is created, with no user-driven
+delay (like a picker dialog) in between. Fixed the same way as the
+dashboard: `geoViewer.ts`/`fieldViewer.ts` now post `{command:'ready'}`
+as their very last synchronous statement (right after attaching their
+own `message` listener), reading the already-`acquireVsCodeApi()`'d
+object off `window.vsApi` (set by the inline bootstrap `<script>` in
+each HTML builder, since `acquireVsCodeApi()` can only be called once
+per webview); the host holds a `_pending` closure queue and only sends
+once `ready` arrives, then flushes in order — handles multiple
+`previewGeometry()` calls queued before ready (e.g. several dragged
+files) correctly, not just one.
+
+**Verification:** `npm run compile / lint / test` clean — 190 passed / 1
+skipped (4 new: `test/vtkSniff.test.ts` — finds `POINT_DATA` past 8 KB,
+finds `CELL_DATA` past 8 KB, correctly returns false for bare geometry,
+and doesn't throw on a nonexistent file). `npx vsce package` succeeds,
+2.43 MB, 330 files. Updated `CHANGELOG.md`/`README.md`. **Still not
+smoke-tested in an Extension Development Host** — no browser/GUI here;
+the ready-handshake fix mirrors the dashboard's own proven fix exactly,
+and the custom-editor registration follows VS Code's documented
+`CustomReadonlyEditorProvider` API precisely, but neither has been seen
+rendering.
+
+### 2026-09-13 — found the *actual* "vtk not shown" bug (binary format), and finally verified it visually
+
+User: "i have also noticed still vtk are not shown when they are
+opened." (Also asked to look at two other VS Code CAD/mesh preview
+extensions — loumalouomega's `CAD-Preview` and `VSCode-MDPA-Preview` —
+for feature ideas; covered at the end of this entry.)
+
+**Every previous "vtk not shown" fix this session (lighting, normals,
+zoom clamps) was real but not the actual root cause for field-data
+files.** Inspected a real example that was sitting in the repo the
+whole time — `examples/Helyx/complex/postProcessing/p_ymid.vtk` — with
+a raw byte dump (`head -c` / a small Node script), and its header reads
+`BINARY`, not `ASCII`. HELYX/OpenFOAM's `sampleSurface`/`foamToVTK`
+output defaults to the legacy **binary** format. `src/webview/
+vtkParse.ts`'s `parseLegacyVTK()` — the parser feeding the field
+viewer — was a pure `text.split(/\s+/)` whitespace tokenizer, built and
+tested only against synthetic ASCII fixtures (checked at the time:
+"no real sample with field data exists in examples/" — true when that
+comment was written, false by the time `postProcessing/*.vtk` was
+added to the repo later in the session, and nobody re-checked). Run
+against raw binary bytes, that tokenizer doesn't error — it just
+produces garbage tokens and `parseFloat`s them into garbage numbers, so
+every real field-data `.vtk` from an actual OpenFOAM/HELYX run has been
+silently unreadable this whole time. This is why the lighting/normals
+fixes never actually resolved the user's repeated reports: those fixes
+were correct for bare/ASCII geometry, but the field-viewer's own
+primary use case (real solver output) was hitting a completely
+different, earlier failure.
+
+**Fix:** added a binary-aware sibling parser (`parseBinaryLegacyVTK`)
+alongside the untouched ASCII one (`parseAsciiLegacyVTK`, renamed but
+byte-for-byte identical logic — zero regression risk for existing
+ASCII fixtures/tests), dispatched by reading the file's 3rd header line
+("ASCII" vs "BINARY") in the exported `parseLegacyVTK()`. Legacy-VTK
+binary values are always big-endian ("network order") regardless of
+platform — confirmed by decoding a real point coordinate from the
+example file both ways and checking which produced a sane, small
+number. The parser walks the file byte-by-byte: ASCII keyword lines
+(`POINTS N float`, `POLYGONS n size`, `SCALARS name type`, …) alternate
+with fixed-length binary data blocks; since each block's exact byte
+length is always computable from its own header line, the cursor lands
+exactly on the boundary after reading it, so any whitespace bytes found
+there are guaranteed real ASCII delimiters, never binary data
+coincidentally matching a whitespace byte value. Connectivity
+(POLYGONS/TRIANGLE_STRIPS) is always 4-byte int in the legacy binary
+format, independent of the file's declared point data type — confirmed
+against the real file's actual bytes (decoded a `3, i0, i1, i2` triangle
+correctly at the expected offset). An unrecognized keyword (LINES,
+CELL_TYPES, a modern METADATA/INFORMATION block, …) stops the scan
+rather than guessing a payload size — whatever was already parsed
+(points, connectivity, arrays read so far) is still returned, a
+partial-but-correct result rather than a corrupted one.
+
+**Actually verified this time — a real headless-Chrome + WebGL render,
+not just source-reading.** Every vtk.js/three.js fix earlier this
+session was shipped with an explicit caveat that it had never been
+seen rendering, since this environment has no GUI. This round, found
+that `playwright` installs cleanly here and can drive the *system*
+Google Chrome via `channel: 'chrome'` (no Chromium download needed,
+which would likely be blocked) — so built a real harness: the compiled
+`media/field-viewer.js`/`geo-viewer.js` loaded in an actual headless
+Chrome tab, fed the exact real example files, and checked the result
+two ways — `gl.readPixels()` on the WebGL canvas (works reliably right
+after a render call in the same evaluate(), before any buffer swap) and
+an actual `page.screenshot()` (works regardless of timing, since it
+reads the compositor's output, not the GL backbuffer directly — the
+right tool once >0ms passes before checking). Confirmed: (1) the real
+126,390-point/257,202-cell binary `p_ymid.vtk` now parses correctly
+(label shows the right counts, one selectable "p" channel) and
+**renders real pixels** (100% of the canvas covered in field-colored,
+non-background pixels — the sampled plane, correctly framed); (2) a
+real STL (`all_chillers.stl`, a very flat/wide rooftop-equipment
+layout, bounding box 1524×875×5 units) renders correctly too — a
+screenshot showed thin diagonal dashed lines, which is the *correct*
+rendering of that specific, extremely flat geometry from an isometric
+angle, not a bug; (3) the ASCII bare-geometry path (a `LINES`-only
+featureEdgeMesh file) still parses without error post-refactor, i.e.
+no regression; (4) the `{command:'ready'}` handshake added earlier this
+session actually fires, exactly once, synchronously after the
+`message` listener attaches. This is the first time in this whole
+multi-round vtk.js saga that a fix has been confirmed by looking at
+actual rendered pixels instead of reasoning through library source —
+worth remembering as a technique for future webview-rendering bugs in
+this project, not just this one.
+
+**Files:** `src/webview/vtkParse.ts` (added `parseBinaryLegacyVTK` +
+dispatch; `parseLegacyVTK`'s ASCII behavior is unchanged, just
+renamed-and-called-through). `test/vtkParse.test.ts` — 3 new binary
+tests: a hand-built binary fixture (points + POLYGONS + a POINT_DATA
+SCALARS + a CELL_DATA VECTORS, mirroring the existing ASCII fixture
+test exactly so the two are easy to compare), a bare-binary-geometry
+case, and — the one that actually matters — an end-to-end read of the
+real `examples/Helyx/complex/postProcessing/p_ymid.vtk` file, asserting
+the exact real point/cell counts and that a `p` field comes back.
+
+**Verification:** `npm run compile / lint / test` clean — 193 passed /
+1 skipped (3 new, all in `test/vtkParse.test.ts`). `npx vsce package`
+succeeds, 2.44 MB. Playwright + system Chrome used only as a local,
+throw-away verification harness this round (installed into `/tmp`,
+never added as a project dependency, deleted afterward) — not part of
+the shipped extension or its test suite.
+
+**Feature inspiration from the two linked projects** (per the user's
+request — "get inspired... don't use their extension"), **not
+implemented yet**, ranked by fit with this extension's existing
+three.js/vtk.js stack (no OpenCascade/Gmsh):
+- From `loumalouomega/VSCode-MDPA-Preview` (also a pure vtk.js viewer —
+  directly comparable architecture, unlike CAD-Preview below): an
+  **orientation cube + axis arrows** gizmo where clicking a face snaps
+  the camera to that canonical view (upgrade from today's
+  display-only axis gizmo); a compact **navigation panel** (stepped
+  rotate/pan buttons, zoom +/-, Fit, Center); an **interactive clip
+  plane** (X/Y/Z or a free normal, with a live filled cross-section) —
+  especially valuable for CFD, to look inside a domain rather than only
+  at its surface; **per-layer opacity sliders** (the multi-layer
+  geometry viewer built earlier this session already has the layer
+  model this would hang off of); a **Persp/Ortho toggle**; an
+  editable/lockable color range + log-scale option + a colormap
+  dropdown for the field viewer (today's diverging colormap is fixed);
+  **Screenshot to PNG**. Their **click-to-inspect** (value at a point)
+  and **plot-over-time** features are bigger asks (need picking +, for
+  the latter, a time-series of files) but worth keeping in mind if the
+  field viewer grows further.
+- From `loumalouomega/CAD-Preview` (OpenCascade.js/Gmsh-based — a much
+  heavier stack, not a fit to adopt wholesale, but some UI ideas
+  transfer): the same orientation-cube/Fit/Ctr view controls; a
+  **File ▾ menu** with Open/Save/Export as both menu items and
+  commands; **Measurement tools** (distance/angle, pinned as
+  annotations) — plausible for the geometry viewer's STL/OBJ meshes
+  without needing any B-rep kernel; drag-a-file-onto-the-3D-view (this
+  extension already added this earlier in the session, independently).
+  Its actual pipeline (OCCT/Gmsh/meshio++, MCP server, parametric
+  edits) is out of scope — this extension has no CAD-kernel need, and
+  pulling in OpenCascade.js would be a large, unrelated dependency for
+  a project whose actual job is dictionary editing + case
+  visualization, not CAD modeling.
+
+### 2026-09-13 — view controls panel, and finally getting a real WebGL render to confirm the fixes (three stacked bugs, not one)
+
+User pointed at two more `loumalouomega` VS Code extensions for feature
+ideas — `CAD-Preview` ("view fit, pan rotate etc") and
+`VSCode-MDPA-Preview` ("add most of its features... be more friendly and
+consistent") — and separately reported the field viewer was *still*
+blank. Both threads intersect: building the requested view-control panel
+required actually driving vtk.js's camera API, which is what finally
+forced a real, working headless-render test setup — and that setup then
+exposed that the "still blank" report had **three independent, genuine
+bugs** behind it, not one, each masking the others.
+
+**View controls panel (`CAD-Preview`-inspired, "view fit, pan rotate
+etc").** Added a compact corner overlay to both `geometryHtml.ts` and
+`fieldHtml.ts`: two 3×3-grid "compasses" (rotate: tilt/rotate ±15° with
+Fit in the center; pan: 4-direction pan with Reset in the center), a
+zoom in/out row, and a wireframe toggle (geometry viewer) or
+ortho/perspective toggle (field viewer) plus a screenshot button.
+Verified via reading the actual installed vtk.js `Camera.js` source (not
+guessed) that `azimuth(deg)`/`elevation(deg)`/`zoom(factor)`/
+`translate(x,y,z)` all exist with exactly the classic VTK semantics —
+`zoom()` in particular scales `parallelScale` or `viewAngle` depending on
+projection mode, so one button works correctly in both Ortho and Persp.
+Pan has no built-in "by pixels" primitive in vtk.js, so it's built from
+`camera.getDirectionOfProjection()` × `getViewUp()` to get a right
+vector, scaled by `camera.getDistance()`. Geometry viewer reuses its
+existing `sph`/`panCamera`/`fitCameraToLayers` orbit-camera state
+directly. Screenshot: `canvas.toDataURL('image/png')` → posted to the
+host → `src/workflow/screenshot.ts` (new, shared by both panels and the
+custom editor) → a native `showSaveDialog` + `fs.writeFileSync`.
+
+**Building and testing this is what surfaced the real "still blank"
+root causes.** Getting the rotate/pan/zoom buttons right meant actually
+watching the camera move — which meant finally getting a *working*
+headless-Chrome test harness, not just reasoning from source (the
+caveat attached to every vtk.js/three.js fix all session). Found that
+`playwright` installs cleanly in this environment and can drive the
+*system* Google Chrome via `channel: 'chrome'` (no Chromium download,
+which would likely be blocked). Three real, previously-undiscovered bugs
+came out of actually using it — each one alone was enough to explain
+"blank field viewer", which is exactly why earlier fixes (lighting,
+normals, the binary-parsing fix from the previous round) never fully
+resolved the report:
+
+1. **A real WebGL-context-loss issue in the test harness itself**,
+   not the extension — worth recording since it cost real time. The
+   legacy `--use-gl=swiftshader` Playwright/Chrome launch flag causes
+   `CONTEXT_LOST_WEBGL` specifically when vtk.js is the one driving the
+   canvas (confirmed with vtk.js's own trivial built-in `ConeSource`
+   example — it lost context too, under identical launch args that
+   render three.js scenes just fine). The fix is `--use-angle=swiftshader
+   --use-gl=angle --enable-unsafe-swiftshader` (the modern ANGLE-backed
+   software-rendering flags) instead of the older `--use-gl=swiftshader`
+   alone. Also confirmed `gl.readPixels()` called from a *separate*
+   `page.evaluate()` after the fact is unreliable for both three.js and
+   vtk.js canvases (their default `preserveDrawingBuffer:false` means the
+   backing buffer can already be cleared by the time of an out-of-band
+   read) — `page.screenshot()` (reads the compositor's output, not the
+   GL backbuffer) is the reliable check; this produced a false "100%
+   pixel coverage" positive in the previous round's verification, since
+   an untouched/transparent canvas differs from the background color
+   just as much as real content would under that check's naive
+   thresholding.
+2. **A real flexbox circular-sizing bug**, present in the shipped
+   `fieldHtml.ts`/`geometryHtml.ts` all along. `#field-panel`/
+   `#field-canvas` (and the geometry viewer's `#geo-panel`/`#geo-canvas`)
+   are `flex:1` items with no `min-height:0`. vtk.js's own canvas gets
+   `style.width:100%` but **no** CSS height at all (confirmed by reading
+   `Rendering/OpenGL/RenderWindow.js`) — three.js's canvas has no CSS
+   height either (only `width:100%` in this extension's own stylesheet).
+   Left alone, the canvas's rendered height falls back to its `height`
+   *attribute* (whatever `glWindow.setSize()`/`renderer.setSize()` last
+   wrote), which then feeds back into `container.clientHeight` on the
+   next resize measurement — with default `min-height:auto`, a flex
+   item's automatic minimum size is based on its content's intrinsic
+   size, so the container grows to match the canvas instead of the other
+   way around, with no upper bound (measured it settling at a genuinely
+   wrong 900×900 in one test, actually growing past the whole 700px
+   viewport height). Setting the canvas's own CSS `style.height` doesn't
+   fix it either — percentage/`100%` heights need a *definite* parent
+   height to resolve against, and an auto-sized flex item isn't one, so
+   it just resolves back to `auto` → the same intrinsic-attribute
+   fallback. The actual fix is `min-height:0` on the `flex:1` containers
+   (`#field-panel`, `#field-canvas`, `#geo-panel`, `#geo-canvas`) —
+   confirmed by measuring the full layout chain before/after: container
+   height stayed a correct, stable value through repeated data loads
+   only once this was added at *every* affected level (adding it to just
+   the innermost container wasn't sufficient — the ancestor flex item had
+   the same unbounded-content problem one level up).
+3. **A bad default camera direction for near-planar datasets** — the
+   actual, final piece of "why does a real sample surface render as
+   nothing." `renderer.resetCamera()` only fits *distance* to the
+   current bounds; it explicitly preserves whatever direction the camera
+   already has (confirmed by instrumenting a real render and reading the
+   camera position back out before/after `resetCamera()` — direction
+   was unchanged). A `sampleSurface`/`foamToVTK` slice is close to flat
+   in one axis (the real example used throughout this investigation is
+   ~0-thickness in X); the camera's default direction happened to look
+   straight down a *different* axis than X, but since the object's other
+   two dimensions (325 and 8000 units) are wildly asymmetric, the
+   default view still projected the plane to a visually-negligible
+   sliver. **Made a real, caught-and-fixed reasoning error while fixing
+   this**: the first attempt biased the view direction *away* from the
+   bounds' thinnest axis (reasoning backwards — "avoid looking down the
+   thin axis" was applied as "put the camera far along the wide axes"
+   instead of "look mostly along the thin axis"), and a screenshot of
+   that attempt still showed a bad, nearly-invisible thin diagonal line —
+   caught by actually looking at the render, not by re-reading the code.
+   Fixed by inverting it: the camera direction's dominant component is
+   now the bounds' thinnest axis (its normal), with a small tilt from the
+   other two for a 3/4 look rather than a flat orthogonal one. Extracted
+   the pure math into `src/webview/cameraOrient.ts`
+   (`computeFaceOnView(bounds)`, no vtk.js/DOM dependency) so it's
+   unit-testable — `test/cameraOrient.test.ts` (new) asserts the offset
+   along the thinnest axis dominates over the two wide axes, for both an
+   X-thin and a Z-thin dataset, which is exactly the assertion that would
+   have caught the inverted first attempt.
+
+**Verification.** `npm run compile / lint / test` clean — 199 passed / 1
+skipped (6 new, all in `test/cameraOrient.test.ts`). `npx vsce package`
+succeeds, 2.44 MB. And, for the first time this session, an actual
+rendered screenshot confirming the fix: the real 126,390-point/257,202-
+cell `p_ymid.vtk` example now renders as a real, correctly-colored
+horizontal band (matching its true 8000×325-unit proportions) with the
+legend's `p` field range (0.0002 to 3917) visibly mapped across it —
+not reasoned about, not inferred from metadata, actually seen. Also
+re-confirmed the geometry viewer (`all_chillers.stl`) still renders
+correctly after the shared `min-height:0` CSS fix, and confirmed via
+direct `dispatchEvent` testing that the nav-panel buttons correctly
+drive the camera (a `page.click()` targeting quirk on the small 22×22px
+buttons under Playwright's own actionability check — not a real bug —
+initially made two rotate-button clicks appear to do nothing; dispatching
+a raw `MouseEvent` instead confirmed the handlers and camera math are
+correct). Playwright itself was used only as a local, throw-away
+verification harness (installed to `/tmp`, deleted after each round) —
+not a project dependency or part of the shipped test suite.
+
+**Feature roadmap for `VSCode-MDPA-Preview`'s bigger ask** ("add most of
+its features... more friendly and consistent UI/UX") — not started this
+round beyond the view-controls panel above; needs sequencing before a
+large implementation push given the scope (contour/quiver/isosurface/
+threshold/deformed-shape field-viz modes, mesh quality metrics, find-by-
+id, click-to-inspect, a full data table, per-layer opacity, a colormap
+picker + log scale + editable range). Recommend tackling in roughly this
+order, each a self-contained slice: (1) field viewer color-range/colormap
+picker + log scale (small, reuses the existing channel-coloring code
+directly), (2) per-layer opacity sliders (small, the multi-layer geometry
+model already exists), (3) an interactive clip plane (medium, high value
+for CFD — "look inside the domain" — vtk.js ships `vtkPlane`/
+`CutterMapper` for exactly this), (4) click-to-inspect a point/cell's
+field value (medium), (5) mesh quality metrics + isosurface/threshold/
+quiver modes (larger, more novel code each). Not committed to without
+the user picking an order, given the size.
+
+### 2026-09-13 — interactive clip plane (user picked this as the next MDPA-Preview-inspired feature)
+
+Given the roadmap above, the user chose the clip plane. Implemented on
+both viewers, using each library's real native clipping support (no
+hand-rolled geometry cutting):
+
+- **Field viewer** (`fieldViewer.ts`): `mapper.addClippingPlane(plane)`
+  with a single `vtkPlane` instance, confirmed via
+  `Rendering/Core/AbstractMapper.js` — `addClippingPlane`/
+  `removeAllClippingPlanes`/`getClippingPlanes` are real mapper methods.
+  `updateClipPlane()` recomputes the plane's origin/normal from the
+  current polydata bounds + the slider's 0-100% position along the
+  selected axis; re-called on new file loads too (bounds change) so a
+  stale plane doesn't end up out of range.
+- **Geometry viewer** (`geoViewer.ts`): `renderer.localClippingEnabled =
+  true` + a single shared `THREE.Plane`, assigned to every layer's
+  `material.clippingPlanes` when enabled (three.js's real per-material
+  clipping API, not a shader hack). New layers pick up the current clip
+  state in `addLayer()`. Existing `DoubleSide` materials mean the cut
+  face shows the mesh's inner surface rather than nothing.
+- Both are **hollow** cuts (open shell), not a filled/capped
+  cross-section — a solid cap needs a separate cut-and-triangulate pass
+  (vtk.js's `vtkCutter`, or manual polygon capping for three.js) and was
+  scoped out as a v2 given the size of the ask already covered.
+- UI: a `#clip-panel` (X/Y/Z toggle buttons + flip + a slider) added to
+  both `fieldHtml.ts` and `geometryHtml.ts`, positioned opposite the nav
+  panel — bottom-left for the field viewer, and bottom-left-but-above-
+  the-axes-gizmo (`bottom:96px`) for the geometry viewer, since the
+  existing 80px axes-canvas already occupies the plain bottom-left
+  corner there.
+
+**Verification — a real render again, not just code review.** Used the
+same Playwright + system-Chrome-with-ANGLE-swiftshader-flags harness
+from the rendering-bug investigation earlier this session. Tested the
+geometry viewer against `examples/Helyx/simple/constant/triSurface/
+_refSphere.stl` (a real sphere — an unambiguous shape for visually
+confirming a flat cut) via direct `dispatchEvent` clicks (Playwright's
+own `.click()` had a known hit-testing quirk on these small buttons,
+established in the earlier investigation): toggling the clip showed a
+sphere with a clean flat cut; flipping direction correctly kept the
+opposite (now much smaller) crescent instead; switching the axis to Z
+correctly showed a horizontal dome cut. Tested the field viewer against
+the same real `p_ymid.vtk` example: enabling a Y-axis clip visibly
+shortened the rendered plane from one end, and moving the slider from
+50% to 75% shortened it further, proportionally — confirming the
+slider-to-position mapping is correct, not just that *some* clipping
+happens.
+
+**Verification:** `npm run compile / lint / test` clean — 199 passed / 1
+skipped (unchanged; this is webview UI/rendering wiring with no new pure
+logic to unit test, same as the nav-panel work). `npx vsce package`
+succeeds, 2.44 MB. Playwright used again only as a local, throw-away
+verification harness (installed to `/tmp`, deleted after).
+
+### 2026-09-13 — LSP crash resilience + viewer interaction/legend overhaul (direct user feedback)
+
+Two independent reports in one message: a `RuntimeError: memory access
+out of bounds` crashing the language server repeatedly, and a detailed
+list of 3D-viewer UX complaints (rotation/pan/zoom feel, useless zoom
+buttons, the legend's look/placement/size, no colormap choice).
+
+**LSP crash — root-caused the *failure mode*, not the trigger.** Spent
+real effort trying to reproduce the actual crash to fix its root cause:
+tried a 500K-line real-shaped OpenFOAM field file (5.4 MB), a single
+~4 MB line with no newlines, 50,000 levels of nested `{ }`, a
+binary-`writeFormat` field file's bytes decoded as UTF-8 garbage (a
+real, plausible trigger — HELYX/OpenFOAM `p`/`U`/`T`/etc. field files
+can legitimately be written in the same "binary" format as the
+`postProcessing` VTK output this session's earlier round dealt with,
+under the exact same bare filenames this extension already recognizes),
+and a battery of Unicode edge cases (emoji, combining characters, BOM,
+lone surrogates, 500K emoji in a comment). **None reproduced it** — so
+the exact trigger from the user's environment remains unknown. What
+*did* get root-caused, by reading the actual bundled
+`web-tree-sitter.cjs` runtime rather than guessing: it's built on ONE
+process-wide Emscripten WebAssembly module — `Parser.init()` sets a
+module-level `C` binding singleton (`setModule(...)`), and every
+`new Parser()` afterward just calls `C._ts_parser_new_wasm()` against
+that SAME shared linear memory (confirmed in `Parser.initialize()`).
+So once a trap corrupts that memory, **recreating the `Parser` object
+does nothing** — every parser in the process shares the same poisoned
+backing memory, which is exactly why the crash cascaded into every
+subsequent `hover`/`completion`/`semanticTokens` request failing
+identically for the rest of the session, as reported. A first attempt
+at a fix (catch the exception, discard `this.tsParser`, call
+`getParser()` again to build a replacement) was caught as insufficient
+*before* shipping, specifically because of this shared-memory fact.
+**Actual fix**: `server.ts`'s `parseDoc()` now catches the trap, logs a
+clear diagnostic message, and calls `process.exit(1)` (after a short
+`setTimeout` to let the log reach the client first) — `extension.ts`
+never registered a custom `errorHandler` on the `LanguageClient`, so
+`vscode-languageclient`'s *default* one is in effect, which restarts a
+closed server process automatically. A fresh process gets a genuinely
+fresh WASM module, which is the only real fix for a trapped instance.
+
+**Viewer interactions rebuilt per explicit feedback**, on both the
+geometry viewer (three.js) and field viewer (vtk.js):
+- **Rotate pivots on the clicked point**, not a fixed scene center.
+  Three.js: `THREE.Raycaster` against the visible layer meshes on
+  rotate-drag mousedown; if it hits something, `retargetTo(point)`
+  recomputes `sph.theta`/`phi`/`r` from `(camera.position - point)` so
+  the camera's position doesn't move — only its aim does (a `lookAt`
+  snap onto whatever was clicked, not a teleport). vtk.js: no picker was
+  in use at all before this round; added one (`vtkPicker`, confirmed via
+  its `.d.ts` — `pick([x, y, 0], renderer)` in *display* coordinates,
+  which are canvas-relative and bottom-up, unlike the browser's
+  top-down `clientY`) and simply `camera.setFocalPoint(...)` to the pick
+  result — vtk's camera always looks at its focal point, so this alone
+  reproduces the same "snap-then-orbit-from-here" behavior. Both
+  engines' built-in "no jump at all" version was investigated and
+  rejected as geometrically impossible in general (an off-center click's
+  ray isn't the camera's central axis, so *some* re-aim on retarget is
+  unavoidable with a look-at camera model) — a small, expected snap onto
+  what you clicked, matching common CAD-tool behavior, not a bug.
+- **Right-click pans** on both viewers now (previously: geoViewer.ts
+  already supported right-drag pan, but fieldViewer.ts had no working
+  right-click binding at all — `vtkInteractorStyleTrackballCamera`'s own
+  defaults only bind plain-left=rotate/shift+left=pan/ctrl+left=spin,
+  confirmed by reading its source, no right or middle-button handler
+  exists in that class). Replaced vtk.js's own mouse dispatch entirely
+  with direct camera manipulation (reusing the same
+  azimuth/elevation/translate/zoom primitives the nav-panel buttons
+  already used) rather than fighting its internal state machine to inject
+  a pick-and-retarget mid-gesture.
+- **Zoom sensitivity reduced** on both: replaced the fixed ~10-20%-per-
+  wheel-tick step with an exponential response to the raw `deltaY`
+  (`factor = exp(-deltaY * 0.0006)`), smooth across mouse wheels and
+  trackpads and noticeably gentler than before.
+- **Removed the nav-panel's zoom in/out buttons** on both viewers,
+  called out directly as not useful (scroll-zoom and Fit/Reset cover the
+  same need).
+- **Field viewer legend redesigned**: was a full-panel-width horizontal
+  bar in a dedicated footer strip; now a compact **vertical** bar
+  (14×130px) in a small corner overlay panel, bottom-right (just left of
+  the nav panel), matching the nav/clip panels' own visual style.
+- **Colormap picker added** (`src/webview/colormaps.ts`, new, pure/
+  testable — a `Colormap[]` of `{id, label, stops}` control points, no
+  vtk.js/DOM dependency): Cool→Warm (the previous fixed default, kept
+  first/default), Jet (a vivid rainbow map, explicitly requested), and
+  Viridis/Plasma/Grayscale as further conventional options. A
+  `<select>` in the new legend panel rebuilds the `vtkColorTransferFunction`
+  and redraws the CSS gradient (`toCssGradientStops()`, also pure) on
+  change, then reapplies the currently-selected channel's color range so
+  switching colormaps doesn't require reselecting the field.
+
+**Verification:** `npm run compile / lint / test` clean — 203 passed / 1
+skipped (4 new, `test/colormaps.test.ts`: preset shape/range validation,
+`findColormap` fallback, gradient-string generation). `npx vsce package`
+succeeds, 2.45 MB. Verified interactions and the new legend visually via
+the same Playwright + system-Chrome-with-ANGLE-swiftshader-flags harness
+from the earlier rendering-bug round, using **real `page.mouse` events**
+(not `dispatchEvent`, which was a documented Playwright-hit-testing
+workaround needed for the tiny 22×22px nav buttons specifically, not for
+full-canvas drags): left-drag rotate visibly changes the view (axis
+gizmo reorients) with a sphere test file confirming a clean rotation;
+right-drag pan visibly moves the object in the drag direction (grab-feel
+confirmed) on both viewers; one wheel-tick now changes size only
+slightly, confirmed by comparing before/after screenshots; the colormap
+dropdown lists all 5 presets and switching between them (Cool→Warm →
+Jet → Viridis) visibly recolors both the rendered plane and the legend
+bar correctly on the real 126k-point HELYX example. **Not verified**:
+the actual tree-sitter crash fix, since the trigger was never
+reproduced — the fix is grounded in reading the real
+`web-tree-sitter.cjs` architecture, not in a before/after repro.
+
+### 2026-09-13 — `.stl`/`.obj` also default to the 3D viewer on open
+
+User: "when I open a stl or a CAD file can openfoam 3D geometry be a
+default option to open the stl."
+
+Small, mechanical extension of the `.vtk`/`.vtp` default-custom-editor
+work from earlier this session: `VtkCustomEditorProvider.ts`'s own
+`resolveCustomEditor()` logic already treated anything that isn't `.vtp`
+or a field-carrying `.vtk` as plain geometry (routing to
+`buildGeometryHtml`/`previewGeometry`, extension-agnostic) — it just
+wasn't *registered* for `.stl`/`.obj` files at all. Added both filename
+patterns to `package.json`'s existing `contributes.customEditors` entry
+(still `priority: "default"`, still "Reopen Editor With…"-overridable);
+no code changes needed beyond updating the provider's own doc comment
+to reflect the broader scope. "CAD file" in the request is STL/OBJ
+specifically — this extension's geometry viewer doesn't parse any
+other CAD format (STEP/IGES/etc. are out of scope, per the earlier
+`CAD-Preview`/`VSCode-MDPA-Preview` inspiration discussion where that
+was flagged as belonging to a much heavier OpenCascade-based stack).
+
+**Verification:** `npm run compile / lint / test` clean — 203 passed / 1
+skipped (unchanged; a `contributes.customEditors` selector addition has
+no unit-testable logic of its own). `npx vsce package` succeeds,
+2.45 MB.
+
+### 2026-09-13 — clip-panel consolidation + multi-select "Open with OpenFOAM 3D Geometry"
+
+User: "there is a panel on the bottom left with x y z and cut etc, is
+not it redundant? if i multi select stls in the explorer there must be
+an option [with] right click to open with openfoam 3d geometry."
+
+**Redundant panel.** The geometry viewer had TWO things labeled with
+X/Y/Z sitting right next to each other in the bottom-left corner: the
+passive axis-orientation gizmo (`#axes-canvas`, always there, shows
+which way is up) and the interactive clip-plane panel (`#clip-panel`,
+added two rounds ago, X/Y/Z axis buttons + a slider). Visually near-
+identical labels in the same corner reads as duplicated controls even
+though they do different things. Fixed by moving the clip-plane
+controls (unchanged element IDs, so `geoViewer.ts`/`fieldViewer.ts`'s
+JS needed zero changes) into the existing view-controls (`#nav-panel`)
+panel as a final section below a `.nav-divider` — one coherent panel
+per viewer instead of two overlapping ones, and the axis gizmo (still
+bottom-left, on its own now) no longer looks like it's duplicating
+anything.
+
+**Multi-select right-click.** Investigated why this didn't already
+work: `package.json` had **no `explorer/context` menu entry at all**
+for `openfoam.previewGeometry`/`openfoam.previewField` — they were only
+ever reachable via the Command Palette or the Case Explorer's own
+`view/item/context` menu, never VS Code's native Explorer right-click
+menu. Added both to a new `explorer/context` section, gated by
+`resourceExtname` regex (`previewGeometry` for `.stl`/`.obj`/`.vtk`,
+`previewField` for `.vtk`/`.vtp` — deliberately overlapping on `.vtk`
+since it can be either, letting the user pick explicitly rather than
+only ever getting the auto-detected one from double-click). Separately,
+`previewGeometryCommand`'s handler only ever read its *first* argument
+— but VS Code invokes a context-menu command as
+`(clickedUri, allSelectedUris[])` when more than one item is selected,
+so even with the menu entry present, a multi-select right-click would
+have silently only opened the one file that happened to be right-
+clicked. Updated the handler to check for that second array argument
+and loop `panel.previewGeometry()` over every selected URI when present
+— reusing the exact same "add as layer" method the multi-select file
+picker and drag-and-drop already call.
+
+**Verification:** `npm run compile / lint / test` clean — 203 passed /
+1 skipped (unchanged; both changes are manifest/command-plumbing with
+no new pure logic). `npx vsce package` succeeds, 2.45 MB. Re-verified
+the merged panel visually via the same Playwright harness — the clip
+toggle button still correctly enables/highlights and clips the test
+sphere from within its new location inside `#nav-panel`, confirming the
+ID-preserving move didn't break the existing JS wiring.
+
+**Not yet addressed — flagged for a scoped decision, not silently
+started:** the user's third point in the same message — merging the
+geometry viewer (three.js) and field viewer (vtk.js) into one single
+"OpenFOAM Preview" tool that handles both plain CAD geometry and VTK
+field data. This is a materially bigger undertaking than the two fixes
+above: the two viewers run on genuinely different rendering engines
+with no shared scene graph, so a *true* merge means picking one engine
+for everything (vtk.js can already render bare geometry with no field
+data, as proven by the earlier "vtk not shown" investigation — it's the
+more capable candidate) and porting all of three.js-only functionality
+(multi-layer STL/OBJ, the click-to-orbit raycasting, wireframe toggle)
+onto it, or the reverse. Raised this trade-off directly with the user
+rather than guessing at how deep a "merge" they actually want (a single
+entry-point/command that still runs two engines under the hood vs. one
+true unified engine) before committing to a multi-round rewrite.
+
+### 2026-09-13 (continued) — "OpenFOAM Preview" unified, per the user's chosen scope
+
+Asked the user which depth of merge they wanted (AskUserQuestion): "one
+command/UI, same two engines underneath" vs. "one engine for
+everything (full rewrite)." They picked the former — implemented it
+directly rather than the bigger rewrite.
+
+**New single command: `openfoam.preview`.** Auto-detects field-vs-
+geometry per file (reusing `looksLikeFieldData`, same sniff already
+used everywhere else this session) and routes to
+`GeometryPreviewPanel`/`FieldViewerPanel` accordingly; with no argument
+it falls back to `previewGeometry`'s own quickpick-from-triSurface flow
+rather than duplicating that logic. Handles the context-menu
+multi-select calling convention (`(clickedUri, allSelectedUris[])`) by
+partitioning the whole selection into field vs. geometry buckets and
+opening each into the right panel — a multi-select of mixed file types
+now does the sensible thing instead of only working for one type.
+`previewGeometry`/`previewField` stay registered (now hidden from the
+Command Palette, `"when": "false"`, matching the existing pattern for
+the staging-tab's own internal commands) since `openfoam.preview` just
+delegates to them — no duplicated panel-creation logic.
+
+**Every entry point now goes through it, closing real latent bugs, not
+just for uniformity:**
+- `package.json`'s `explorer/context` menu — one entry
+  (`openfoam.preview`, matching all four extensions) instead of two
+  separate ones a user would have to pick between.
+- `OpenFOAMCaseTreeProvider.ts`'s `CaseItem` — now always sets
+  `command: 'openfoam.preview'` instead of computing `isField` itself
+  just to choose between two command names (still uses the same sniff
+  for the tree's own icon choice, since that's a separate, legitimate
+  need — the icon should show what it'll open as).
+- `VtkCustomEditorProvider.ts`'s `dropFiles` handler — previously
+  forced every dropped file into whatever type the *currently open*
+  document was (drop a `.stl` onto an open `.vtp` tab → it would have
+  tried to open the STL as field data and failed). Now routes each
+  dropped file through `openfoam.preview` individually.
+- `GeometryPreviewPanel.ts`'s and `FieldViewerPanel.ts`'s own
+  `dropFiles` handlers — same fix, and also now genuinely accept all
+  four extensions (the field viewer's drop handler previously silently
+  ignored `.stl`/`.obj` entirely, and only ever took the *first*
+  matching file even when several were dropped together — now every
+  dropped file gets routed and opened, not just one).
+- Custom editor `displayName` renamed from "OpenFOAM 3D Preview" to
+  plain **"OpenFOAM Preview"**, and a new `openfoam.preview` command
+  entry added (title "OpenFOAM: Preview (3D/CAD/VTK)") alongside the
+  now-hidden originals — this is the one users actually see and invoke
+  from here on.
+
+**Verification:** `npm run compile / lint / test` clean — 203 passed /
+1 skipped (unchanged; this round is command/menu routing, no new pure
+logic). `npx vsce package` succeeds, 2.45 MB.
+
+### 2026-09-13 (continued) — legend placement, a real loading state, and a `∇` case-menu icon
+
+Three more direct requests: move the field-viewer legend, add a loading
+state instead of leaving the empty-state page up while a file loads, and
+a `∇` editor-title icon (shown only in an OpenFOAM case) offering "Load
+Geometries…" / "Postprocessing…".
+
+**Legend moved.** `#legend-panel` in `fieldHtml.ts`: `bottom:8px;
+right:104px` → `top:8px;left:8px`. Purely a CSS position change, no JS
+touched.
+
+**Loading state.** Added a `#loading-state` overlay (spinner + "Loading
+&lt;file&gt;…" text) to both `geometryHtml.ts`/`fieldHtml.ts`, shown from
+a new `loading` message through to the actual `previewGeometry`/
+`previewField` payload finishing. Two things had to be gotten right for
+this to actually be visible rather than a no-op:
+1. **Host-side timing.** `GeometryPreviewPanel.previewGeometry()`/
+   `FieldViewerPanel.previewField()`/`VtkCustomEditorProvider`'s
+   `sendPayload()` all do a synchronous `fs.readFileSync` + base64
+   encode before ever posting anything — for a large file that read
+   itself can take real time, during which nothing was shown before
+   this change. Now they post `{command:'loading', fileName}`
+   *immediately*, before that read — `postMessage` to a webview is
+   async IPC, so the webview (a separate process) can paint the
+   spinner while the host's read+encode still runs, rather than only
+   finding out once the data (and the read time) has already happened.
+2. **Webview-side timing.** `loadDataset()`/the STL-OBJ-VTK parse +
+   `addLayer()` path are both synchronous, single-threaded JS. Showing
+   the loading overlay and then immediately calling that heavy work in
+   the same tick would never let the browser actually paint the overlay
+   first — same class of issue as anything that blocks the main thread
+   right after a DOM update. Deferred the heavy work with a **double
+   `requestAnimationFrame`** (`afterPaint()`, new small helper in both
+   `geoViewer.ts`/`fieldViewer.ts`) after showing the spinner, which
+   reliably lands after the next paint, so the spinner is genuinely on
+   screen before the parse/render work blocks the thread.
+Verified visually (Playwright + the ANGLE-swiftshader flags from
+earlier in this session): posting a `loading` message shows the
+spinner + filename immediately; posting the real data afterward clears
+it and shows the rendered result, for both viewers.
+
+**`∇` case-menu icon.** New `openfoam.caseMenu` command with a custom
+SVG icon (`media/nabla-{light,dark}.svg` — a plain `<text>` glyph for
+"∇", U+2207, since VS Code's own codicon set has nothing resembling it;
+two variants since editor-title icons need distinct light/dark-theme
+colors, unlike CSS icons that can use `currentColor`), added to the
+`editor/title` menu gated on a new `openfoam.caseDetected` context key.
+That key is set from `caseTreeProvider.getCaseRoot()` (already
+maintained by the existing Case Explorer — no new detection logic) on
+every tree-data-change event, so it tracks the same case-root state the
+sidebar already shows. The command itself is a `showQuickPick` with two
+options — "Load Geometries…" (multi-select file dialog defaulting to
+`constant/triSurface`) and "Postprocessing…" (multi-select, defaulting
+to the case's `postProcessing/` folder if one exists) — both of which
+just call the already-unified `openfoam.preview` command with the full
+selection, reusing everything built earlier this session rather than
+adding a third code path.
+
+**Verification:** `npm run compile / lint / test` clean — 203 passed /
+1 skipped (unchanged; all three changes are CSS/webview-timing/command-
+plumbing with no new pure logic to unit test). `npx vsce package`
+succeeds, 2.45 MB, now including the two new SVG icon files. Loading
+state and legend placement re-confirmed visually via the same
+Playwright harness pattern used throughout this session's viewer work.

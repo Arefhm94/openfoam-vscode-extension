@@ -1,25 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-
-/** Cheap sniff of the first few KB for POINT_DATA/CELL_DATA — avoids
- *  reading a potentially multi-MB legacy-VTK file in full just to route
- *  the click. */
-function looksLikeFieldData(fsPath: string): boolean {
-  try {
-    const fd = fs.openSync(fsPath, 'r');
-    try {
-      const buf = Buffer.alloc(8192);
-      const n = fs.readSync(fd, buf, 0, buf.length, 0);
-      const head = buf.toString('utf8', 0, n);
-      return /\bPOINT_DATA\b|\bCELL_DATA\b/.test(head);
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    return false;
-  }
-}
+import { looksLikeFieldData } from '../shared/vtkSniff';
 
 export class CaseItem extends vscode.TreeItem {
   constructor(
@@ -36,17 +18,20 @@ export class CaseItem extends vscode.TreeItem {
         const ext = path.extname(label).toLowerCase();
         const isVtkFamily = ['.vtk', '.vtp'].includes(ext);
         const isGeometry = ['.stl', '.obj'].includes(ext) || isVtkFamily;
-        // `.vtp` and a `.vtk` that actually carries POINT_DATA/CELL_DATA
-        // (foamToVTK / postProcessing output) go to the field viewer
-        // (color-by-array, legend); a bare geometry `.vtk` (e.g. a
-        // featureEdgeMesh) still gets the plain 3D preview.
-        const isField = ext === '.vtp' || (ext === '.vtk' && looksLikeFieldData(resourceUri.fsPath));
         if (isGeometry) {
+          // `openfoam.preview` does its own field-vs-geometry detection
+          // (`.vtp`, or a `.vtk` that actually carries POINT_DATA/
+          // CELL_DATA, goes to the field viewer; everything else — a
+          // bare-geometry `.vtk`, `.stl`, `.obj` — goes to the plain 3D
+          // preview) — single source of truth shared with the Explorer
+          // context menu and the default custom editor, rather than
+          // duplicating the sniff here just to pick a command name.
           this.command = {
-            command: isField ? 'openfoam.previewField' : 'openfoam.previewGeometry',
-            title: isField ? 'Preview Field Data' : 'Preview Geometry',
+            command: 'openfoam.preview',
+            title: 'Preview',
             arguments: [resourceUri],
           };
+          const isField = ext === '.vtp' || (ext === '.vtk' && looksLikeFieldData(resourceUri.fsPath));
           this.iconPath = new vscode.ThemeIcon(isField ? 'graph-line' : 'eye');
         } else {
           this.command = { command: 'vscode.open', title: 'Open File', arguments: [resourceUri] };

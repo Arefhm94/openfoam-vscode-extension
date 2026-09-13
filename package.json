@@ -95,6 +95,27 @@
         "path": "./snippets/openfoam.code-snippets"
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "openfoam.vtkPreview",
+        "displayName": "OpenFOAM Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.vtk"
+          },
+          {
+            "filenamePattern": "*.vtp"
+          },
+          {
+            "filenamePattern": "*.stl"
+          },
+          {
+            "filenamePattern": "*.obj"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "semanticTokenTypes": [
       {
         "id": "geometryFile",
@@ -204,6 +225,19 @@
         "icon": "$(export)"
       },
       {
+        "command": "openfoam.preview",
+        "title": "OpenFOAM: Preview (3D/CAD/VTK)",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "openfoam.caseMenu",
+        "title": "OpenFOAM: Case Menu (Load Geometries / Postprocessing)",
+        "icon": {
+          "light": "media/nabla-light.svg",
+          "dark": "media/nabla-dark.svg"
+        }
+      },
+      {
         "command": "openfoam.previewGeometry",
         "title": "OpenFOAM: Preview Geometry (3D)",
         "icon": "$(eye)"
@@ -279,6 +313,14 @@
           "when": "false"
         },
         {
+          "command": "openfoam.previewGeometry",
+          "when": "false"
+        },
+        {
+          "command": "openfoam.previewField",
+          "when": "false"
+        },
+        {
           "command": "openfoam.parametricStudy.exportDakota",
           "when": "openfoam.dakotaAvailable"
         }
@@ -298,6 +340,11 @@
           "command": "openfoam.scaffold.discard",
           "when": "openfoam.stagingTab",
           "group": "navigation@3"
+        },
+        {
+          "command": "openfoam.caseMenu",
+          "when": "openfoam.caseDetected",
+          "group": "navigation@0"
         }
       ],
       "view/title": [
@@ -310,6 +357,13 @@
           "command": "openfoam.monitor.openDashboard",
           "when": "view == openfoam.caseExplorer",
           "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "openfoam.preview",
+          "when": "resourceExtname =~ /\\.(stl|obj|vtk|vtp)$/i",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [

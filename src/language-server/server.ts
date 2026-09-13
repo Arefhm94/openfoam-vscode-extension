@@ -806,9 +806,43 @@ class OpenFOAMLanguageServer {
    */
   private parseDoc(doc: TextDocument): Tree | undefined {
     if (!this.tsParser) return undefined;
-    const tree = parseText(this.tsParser, doc.getText());
-    this.trees.set(doc.uri, tree);
-    return tree;
+    try {
+      const tree = parseText(this.tsParser, doc.getText());
+      this.trees.set(doc.uri, tree);
+      return tree;
+    } catch (err) {
+      // A WASM-level trap ("memory access out of bounds") in
+      // web-tree-sitter's parse table walk has been observed in the
+      // wild, root cause unconfirmed (not reproduced against any
+      // synthetic input tried: huge field files, single huge lines, deep
+      // nesting, binary-as-UTF-8 garbage, astral/combining Unicode).
+      //
+      // What *is* confirmed by reading the actual bundled
+      // web-tree-sitter runtime: it's built on ONE process-wide
+      // Emscripten module — `Parser.init()` sets a module-level `C`
+      // binding singleton, and every `new Parser()` after that just gets
+      // a pointer into the SAME shared WebAssembly linear memory
+      // (confirmed in `Parser.initialize()`: `C._ts_parser_new_wasm()`
+      // against the shared `C`, not a fresh module). So once a trap
+      // corrupts that memory, creating a new `Parser` object does
+      // *nothing* — it's still backed by the same poisoned instance,
+      // which is exactly why every parse after the first crash failed
+      // identically here, cascading into hover/completion/
+      // semanticTokens failing indefinitely. The only real fix for a
+      // trapped WASM instance is a fresh process: exit and let
+      // vscode-languageclient's default `ErrorHandler` (no custom one is
+      // registered in `extension.ts`, so its restart-on-close behavior
+      // applies) relaunch the server, which gets a genuinely new WASM
+      // module. `process.exitCode` + `exit()` rather than a bare
+      // `process.exit()` gives the console.error a chance to flush to
+      // the client first.
+      this.conn.console.error(
+        `OpenFOAM LSP: tree-sitter parser crashed on ${doc.uri} (${err instanceof Error ? err.message : err}); ` +
+        `restarting the language server (its WASM parser is corrupted process-wide and cannot recover in place)`,
+      );
+      setTimeout(() => process.exit(1), 50);
+      return this.trees.get(doc.uri);
+    }
   }
 
   private getTree(doc: TextDocument): Tree | undefined {

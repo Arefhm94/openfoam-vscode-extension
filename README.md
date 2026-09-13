@@ -21,6 +21,40 @@ VS Code support for OpenFOAM case files: syntax highlighting, hover docs, comple
   VTK files at once (or drag them in) and each becomes its own
   toggleable, removable layer at its true relative scale/position; the
   camera auto-fits to what's visible and no longer starts too zoomed in.
+- **`.vtk`/`.vtp` open directly on double-click**, in VS Code's own
+  Explorer too, not just the Case Explorer — no need to right-click and
+  pick a command first. Also fixed the field-data detection itself: it
+  now scans enough of the file to actually find POINT_DATA/CELL_DATA on
+  real meshes, instead of only the first 8 KB.
+- **Field viewer now actually renders real OpenFOAM/HELYX output.**
+  Found and fixed three separate, stacked bugs that were each hiding the
+  others: the parser couldn't read the legacy **binary** VTK format real
+  solver output uses (ASCII-only before), a CSS layout bug could distort
+  the viewer's canvas, and the default camera angle could show a flat
+  sample-plane edge-on (invisible). All three verified with a real
+  headless-browser render of a real example file, not just code
+  inspection.
+- **View controls** on both viewers: a small corner panel with stepped
+  rotate/pan, Fit/Reset buttons, a wireframe or ortho/perspective
+  toggle, and a screenshot-to-PNG button. Mouse controls: **left-drag
+  rotates around whatever you click** (not a fixed center), right-drag
+  pans, and scroll-zoom is gentler than it used to be.
+- **Clip plane** on both viewers: slice along X/Y/Z with a position
+  slider to see inside a mesh instead of only its outer surface.
+- **Field viewer legend**: now a compact vertical color bar
+  (bottom-right) with a **colormap picker** — Cool→Warm, Jet, Viridis,
+  Plasma, Grayscale.
+- **"OpenFOAM Preview" is one feature.** Right-click any `.stl`, `.obj`,
+  `.vtk`, or `.vtp` file in the Explorer (select several at once for
+  multi-layer geometry) and pick **OpenFOAM: Preview (3D/CAD/VTK)** —
+  it opens the right viewer automatically, no need to know which one a
+  file belongs in. A **∇** icon also appears in the editor title bar
+  whenever a workspace looks like an OpenFOAM case, offering **Load
+  Geometries…** and **Postprocessing…** (defaults to the case's
+  `postProcessing/` folder) as one click each.
+- **Loading spinner** while a file is being read/parsed, instead of the
+  empty-state page sitting there looking like nothing happened.
+- **Field viewer legend moved to the top-left.**
 - **Live run dashboard** (`OpenFOAM: Open Run Dashboard`, or the pulse
   icon on the Case Explorer). Tails the case's solver log and charts
   every field's residual live on a log scale, with a
@@ -196,16 +230,18 @@ Shows the document structure in the Explorer and outline view so it is easier to
 
 A dedicated OpenFOAM view in the Activity Bar that shows your case directory tree, with quick actions (copy relative path, reveal in Finder, duplicate file, find file in case) available from each item's context menu.
 
-### Geometry Preview
+### OpenFOAM Preview (geometry + field data)
 
-Right-click an `.stl`, `.obj`, or `.vtk` file (in the Case Explorer or a `geometry { }`/`triSurface` reference) and choose **OpenFOAM: Preview Geometry (3D)** to open an interactive 3D viewer. "Add geometry layer…" accepts multiple files at once, and files can also be dragged in directly from the Explorer or Case Explorer — each one becomes its own toggleable layer, kept at its true relative scale and position, with the camera auto-fitting to whatever's visible.
+`.stl`, `.obj`, `.vtk`, and `.vtp` files open straight into a viewer by default — just double-click one anywhere in VS Code, no right-click needed ("Reopen Editor With…" still offers the plain text editor if you ever need it). It's presented as one feature, **OpenFOAM Preview**: right-click any of those files (in the Case Explorer, VS Code's own Explorer, or a `geometry { }`/`triSurface` reference) — including a multi-selection — and choose **OpenFOAM: Preview (3D/CAD/VTK)**; it automatically opens plain geometry (`.stl`/`.obj`/a bare `.vtk`) in the 3D geometry viewer and field data (`.vtp`, or a `.vtk` carrying `POINT_DATA`/`CELL_DATA`) in the field viewer — you never need to know which one a given file belongs in. A multi-selection loads every geometry file as its own layer in one go. "Add geometry layer…" accepts multiple files at once too, and files can be dragged in directly from the Explorer or Case Explorer onto either viewer — each one becomes its own toggleable layer, kept at its true relative scale and position, with the camera auto-fitting to whatever's visible. (Internally these are still two separate viewers — three.js for geometry, vtk.js for field data — presented and driven as one consistent feature.)
 
 Viewer controls:
 
-- Left drag: rotate
-- Right drag or `Shift` + drag: pan
-- Mouse wheel: zoom
+- Left drag: rotate, pivoting on whatever point you clicked
+- Right drag: pan
+- Mouse wheel: zoom (gentle)
 - Layer chips: click to show/hide, `×` to remove, "Clear All" to reset
+- Corner panel: stepped rotate/pan, Fit, Reset, wireframe toggle, clip
+  plane, screenshot
 
 ### Auto-Detection
 
@@ -218,8 +254,8 @@ Files in `system/`, `constant/`, and time directories such as `0/` or `1/` are d
 | Command | Description |
 |---------|-------------|
 | `OpenFOAM: Search & Configure (Insert Block)` | Open the staging tab: pick a feature, edit the draft block, choose a target, Write (also on `Ctrl+Alt+O` / `Cmd+Alt+O`; the `?` inline trigger is the quicker path) |
-| `OpenFOAM: Preview Geometry (3D)` | Open a geometry file (STL/OBJ/VTK) in the 3D viewer |
-| `OpenFOAM: Preview Field Data (VTK)` | Open a `.vtk`/`.vtp` file with field data — color-by-array, legend, wireframe/points |
+| `OpenFOAM: Preview (3D/CAD/VTK)` | Open a `.stl`/`.obj`/`.vtk`/`.vtp` file (or a multi-selection) in the right viewer, auto-detected |
+| `OpenFOAM: Case Menu (Load Geometries / Postprocessing)` | Also the **∇** editor-title icon in an OpenFOAM case — pick geometry or postprocessing files to preview |
 | `OpenFOAM: Open Run Dashboard` | Live-tail the case's solver log — residual chart, Courant/execution-time info |
 | `OpenFOAM: Start Parametric Study` | Sweep dictionary values across a grid into ready-to-run sibling case directories |
 | `OpenFOAM: Export Parametric Study to Dakota` | Same sweep parameters, as a `dakota.in` + driver script (only shown if `dakota` is on PATH) |

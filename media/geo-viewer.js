@@ -11479,7 +11479,7 @@
      * @param {Raycaster} raycaster - The raycaster.
      * @param {Array<Object>} intersects - The target array that holds the intersection points.
      */
-    raycast(raycaster, intersects) {
+    raycast(raycaster2, intersects) {
       const geometry = this.geometry;
       const material = this.material;
       const matrixWorld = this.matrixWorld;
@@ -11487,19 +11487,19 @@
       if (geometry.boundingSphere === null) geometry.computeBoundingSphere();
       _sphere$6.copy(geometry.boundingSphere);
       _sphere$6.applyMatrix4(matrixWorld);
-      _ray$3.copy(raycaster.ray).recast(raycaster.near);
+      _ray$3.copy(raycaster2.ray).recast(raycaster2.near);
       if (_sphere$6.containsPoint(_ray$3.origin) === false) {
         if (_ray$3.intersectSphere(_sphere$6, _sphereHitAt) === null) return;
-        if (_ray$3.origin.distanceToSquared(_sphereHitAt) > (raycaster.far - raycaster.near) ** 2) return;
+        if (_ray$3.origin.distanceToSquared(_sphereHitAt) > (raycaster2.far - raycaster2.near) ** 2) return;
       }
       _inverseMatrix$3.copy(matrixWorld).invert();
-      _ray$3.copy(raycaster.ray).applyMatrix4(_inverseMatrix$3);
+      _ray$3.copy(raycaster2.ray).applyMatrix4(_inverseMatrix$3);
       if (geometry.boundingBox !== null) {
         if (_ray$3.intersectsBox(geometry.boundingBox) === false) return;
       }
-      this._computeIntersections(raycaster, intersects, _ray$3);
+      this._computeIntersections(raycaster2, intersects, _ray$3);
     }
-    _computeIntersections(raycaster, intersects, rayLocalSpace) {
+    _computeIntersections(raycaster2, intersects, rayLocalSpace) {
       let intersection;
       const geometry = this.geometry;
       const material = this.material;
@@ -11521,7 +11521,7 @@
               const a = index.getX(j);
               const b = index.getX(j + 1);
               const c = index.getX(j + 2);
-              intersection = checkGeometryIntersection(this, groupMaterial, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c);
+              intersection = checkGeometryIntersection(this, groupMaterial, raycaster2, rayLocalSpace, uv, uv1, normal, a, b, c);
               if (intersection) {
                 intersection.faceIndex = Math.floor(j / 3);
                 intersection.face.materialIndex = group.materialIndex;
@@ -11536,7 +11536,7 @@
             const a = index.getX(i);
             const b = index.getX(i + 1);
             const c = index.getX(i + 2);
-            intersection = checkGeometryIntersection(this, material, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c);
+            intersection = checkGeometryIntersection(this, material, raycaster2, rayLocalSpace, uv, uv1, normal, a, b, c);
             if (intersection) {
               intersection.faceIndex = Math.floor(i / 3);
               intersects.push(intersection);
@@ -11554,7 +11554,7 @@
               const a = j;
               const b = j + 1;
               const c = j + 2;
-              intersection = checkGeometryIntersection(this, groupMaterial, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c);
+              intersection = checkGeometryIntersection(this, groupMaterial, raycaster2, rayLocalSpace, uv, uv1, normal, a, b, c);
               if (intersection) {
                 intersection.faceIndex = Math.floor(j / 3);
                 intersection.face.materialIndex = group.materialIndex;
@@ -11569,7 +11569,7 @@
             const a = i;
             const b = i + 1;
             const c = i + 2;
-            intersection = checkGeometryIntersection(this, material, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c);
+            intersection = checkGeometryIntersection(this, material, raycaster2, rayLocalSpace, uv, uv1, normal, a, b, c);
             if (intersection) {
               intersection.faceIndex = Math.floor(i / 3);
               intersects.push(intersection);
@@ -11579,29 +11579,29 @@
       }
     }
   };
-  function checkIntersection$1(object, material, raycaster, ray, pA, pB, pC, point) {
-    let intersect;
+  function checkIntersection$1(object, material, raycaster2, ray, pA, pB, pC, point) {
+    let intersect2;
     if (material.side === BackSide) {
-      intersect = ray.intersectTriangle(pC, pB, pA, true, point);
+      intersect2 = ray.intersectTriangle(pC, pB, pA, true, point);
     } else {
-      intersect = ray.intersectTriangle(pA, pB, pC, material.side === FrontSide, point);
+      intersect2 = ray.intersectTriangle(pA, pB, pC, material.side === FrontSide, point);
     }
-    if (intersect === null) return null;
+    if (intersect2 === null) return null;
     _intersectionPointWorld.copy(point);
     _intersectionPointWorld.applyMatrix4(object.matrixWorld);
-    const distance = raycaster.ray.origin.distanceTo(_intersectionPointWorld);
-    if (distance < raycaster.near || distance > raycaster.far) return null;
+    const distance = raycaster2.ray.origin.distanceTo(_intersectionPointWorld);
+    if (distance < raycaster2.near || distance > raycaster2.far) return null;
     return {
       distance,
       point: _intersectionPointWorld.clone(),
       object
     };
   }
-  function checkGeometryIntersection(object, material, raycaster, ray, uv, uv1, normal, a, b, c) {
+  function checkGeometryIntersection(object, material, raycaster2, ray, uv, uv1, normal, a, b, c) {
     object.getVertexPosition(a, _vA);
     object.getVertexPosition(b, _vB);
     object.getVertexPosition(c, _vC);
-    const intersection = checkIntersection$1(object, material, raycaster, ray, _vA, _vB, _vC, _intersectionPoint);
+    const intersection = checkIntersection$1(object, material, raycaster2, ray, _vA, _vB, _vC, _intersectionPoint);
     if (intersection) {
       const barycoord = new Vector3();
       Triangle.getBarycoord(_intersectionPoint, _vA, _vB, _vC, barycoord);
@@ -14960,6 +14960,145 @@
     ]
   ];
   var _controlInterpolantsResultBuffer = new Float32Array(1);
+  var _matrix = /* @__PURE__ */ new Matrix4();
+  var Raycaster = class {
+    /**
+     * Constructs a new raycaster.
+     *
+     * @param {Vector3} origin - The origin vector where the ray casts from.
+     * @param {Vector3} direction - The (normalized) direction vector that gives direction to the ray.
+     * @param {number} [near=0] - All results returned are further away than near. Near can't be negative.
+     * @param {number} [far=Infinity] - All results returned are closer than far. Far can't be lower than near.
+     */
+    constructor(origin, direction, near = 0, far = Infinity) {
+      this.ray = new Ray(origin, direction);
+      this.near = near;
+      this.far = far;
+      this.camera = null;
+      this.layers = new Layers();
+      this.params = {
+        Mesh: {},
+        Line: { threshold: 1 },
+        LOD: {},
+        Points: { threshold: 1 },
+        Sprite: {}
+      };
+    }
+    /**
+     * Updates the ray with a new origin and direction by copying the values from the arguments.
+     *
+     * @param {Vector3} origin - The origin vector where the ray casts from.
+     * @param {Vector3} direction - The (normalized) direction vector that gives direction to the ray.
+     */
+    set(origin, direction) {
+      this.ray.set(origin, direction);
+    }
+    /**
+     * Uses the given coordinates and camera to compute a new origin and direction for the internal ray.
+     *
+     * @param {Vector2} coords - 2D coordinates of the mouse, in normalized device coordinates (NDC).
+     * X and Y components should be between `-1` and `1`.
+     * @param {Camera} camera - The camera from which the ray should originate.
+     */
+    setFromCamera(coords, camera2) {
+      if (camera2.isPerspectiveCamera) {
+        this.ray.origin.setFromMatrixPosition(camera2.matrixWorld);
+        this.ray.direction.set(coords.x, coords.y, 0.5).unproject(camera2).sub(this.ray.origin).normalize();
+        this.camera = camera2;
+      } else if (camera2.isOrthographicCamera) {
+        this.ray.origin.set(coords.x, coords.y, (camera2.near + camera2.far) / (camera2.near - camera2.far)).unproject(camera2);
+        this.ray.direction.set(0, 0, -1).transformDirection(camera2.matrixWorld);
+        this.camera = camera2;
+      } else {
+        error("Raycaster: Unsupported camera type: " + camera2.type);
+      }
+    }
+    /**
+     * Uses the given WebXR controller to compute a new origin and direction for the internal ray.
+     *
+     * @param {WebXRController} controller - The controller to copy the position and direction from.
+     * @return {Raycaster} A reference to this raycaster.
+     */
+    setFromXRController(controller) {
+      _matrix.identity().extractRotation(controller.matrixWorld);
+      this.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+      this.ray.direction.set(0, 0, -1).applyMatrix4(_matrix);
+      return this;
+    }
+    /**
+     * The intersection point of a raycaster intersection test.
+     * @typedef {Object} Raycaster~Intersection
+     * @property {number} distance - The distance from the ray's origin to the intersection point.
+     * @property {number} distanceToRay -  Some 3D objects e.g. {@link Points} provide the distance of the
+     * intersection to the nearest point on the ray. For other objects it will be `undefined`.
+     * @property {Vector3} point - The intersection point, in world coordinates.
+     * @property {Object} face - The face that has been intersected.
+     * @property {number} faceIndex - The face index.
+     * @property {Object3D} object - The 3D object that has been intersected.
+     * @property {Vector2} uv - U,V coordinates at point of intersection.
+     * @property {Vector2} uv1 - Second set of U,V coordinates at point of intersection.
+     * @property {Vector3} normal - Interpolated normal vector at point of intersection.
+     * @property {number} instanceId - The index number of the instance where the ray
+     * intersects the {@link InstancedMesh}.
+     */
+    /**
+     * Checks all intersection between the ray and the object with or without the
+     * descendants. Intersections are returned sorted by distance, closest first.
+     *
+     * `Raycaster` delegates to the `raycast()` method of the passed 3D object, when
+     * evaluating whether the ray intersects the object or not. This allows meshes to respond
+     * differently to ray casting than lines or points.
+     *
+     * Note that for meshes, faces must be pointed towards the origin of the ray in order
+     * to be detected; intersections of the ray passing through the back of a face will not
+     * be detected. To raycast against both faces of an object, you'll want to set  {@link Material#side}
+     * to `THREE.DoubleSide`.
+     *
+     * @param {Object3D} object - The 3D object to check for intersection with the ray.
+     * @param {boolean} [recursive=true] - If set to `true`, it also checks all descendants.
+     * Otherwise it only checks intersection with the object.
+     * @param {Array<Raycaster~Intersection>} [intersects=[]] The target array that holds the result of the method.
+     * @return {Array<Raycaster~Intersection>} An array holding the intersection points.
+     */
+    intersectObject(object, recursive = true, intersects = []) {
+      intersect(object, this, intersects, recursive);
+      intersects.sort(ascSort);
+      return intersects;
+    }
+    /**
+     * Checks all intersection between the ray and the objects with or without
+     * the descendants. Intersections are returned sorted by distance, closest first.
+     *
+     * @param {Array<Object3D>} objects - The 3D objects to check for intersection with the ray.
+     * @param {boolean} [recursive=true] - If set to `true`, it also checks all descendants.
+     * Otherwise it only checks intersection with the object.
+     * @param {Array<Raycaster~Intersection>} [intersects=[]] The target array that holds the result of the method.
+     * @return {Array<Raycaster~Intersection>} An array holding the intersection points.
+     */
+    intersectObjects(objects, recursive = true, intersects = []) {
+      for (let i = 0, l = objects.length; i < l; i++) {
+        intersect(objects[i], this, intersects, recursive);
+      }
+      intersects.sort(ascSort);
+      return intersects;
+    }
+  };
+  function ascSort(a, b) {
+    return a.distance - b.distance;
+  }
+  function intersect(object, raycaster2, intersects, recursive) {
+    let propagate = true;
+    if (object.layers.test(raycaster2.layers)) {
+      const result = object.raycast(raycaster2, intersects);
+      if (result === false) propagate = false;
+    }
+    if (propagate === true && recursive === true) {
+      const children = object.children;
+      for (let i = 0, l = children.length; i < l; i++) {
+        intersect(children[i], raycaster2, intersects, true);
+      }
+    }
+  }
   var Matrix2 = class _Matrix2 {
     static {
       _Matrix2.prototype.isMatrix2 = true;
@@ -26628,7 +26767,7 @@ void main() {
       geoLabel.textContent = "No geometry file open";
       return;
     }
-    geoLabel.textContent = `${layers.length} layer${layers.length === 1 ? "" : "s"}  |  drag rotate  |  right-drag/Shift+drag pan  |  scroll zoom  |  click a layer to toggle it`;
+    geoLabel.textContent = `${layers.length} layer${layers.length === 1 ? "" : "s"}  |  left-drag rotate (pivots on what you click)  |  right-drag pan  |  scroll zoom  |  click a layer to toggle it`;
   }
   function fitCameraToLayers() {
     if (!layers.length) return;
@@ -26656,17 +26795,72 @@ void main() {
     }
     updateCamera();
   }
+  var clipPlaneThree = new Plane(new Vector3(1, 0, 0), 0);
+  var clipAxis = 0;
+  var clipFlipped = false;
+  var clipEnabled = false;
+  function updateClipPlane() {
+    if (!layers.length) return;
+    const box = new Box3();
+    let any = false;
+    for (const l of layers) {
+      if (!l.visible) continue;
+      box.union(new Box3().setFromObject(l.mesh));
+      any = true;
+    }
+    if (!any) return;
+    const axisKey = ["x", "y", "z"][clipAxis];
+    const lo = box.min[axisKey], hi = box.max[axisKey];
+    const slider = document.getElementById("clip-slider");
+    const t = slider ? Number(slider.value) / 100 : 0.5;
+    const pos = lo + (hi - lo) * t;
+    const normal = new Vector3(0, 0, 0);
+    normal[axisKey] = clipFlipped ? -1 : 1;
+    clipPlaneThree.normal.copy(normal);
+    clipPlaneThree.constant = clipFlipped ? pos : -pos;
+    renderer?.render(scene, camera);
+  }
+  function setClipEnabled(enabled) {
+    clipEnabled = enabled;
+    document.getElementById("clip-toggle")?.classList.toggle("active", enabled);
+    for (const l of layers) {
+      l.mesh.material.clippingPlanes = enabled ? [clipPlaneThree] : [];
+    }
+    if (enabled) updateClipPlane();
+    else renderer?.render(scene, camera);
+  }
+  function setClipAxis(axis) {
+    clipAxis = axis;
+    ["clip-axis-x", "clip-axis-y", "clip-axis-z"].forEach((id, i) => document.getElementById(id)?.classList.toggle("active", i === axis));
+    if (clipEnabled) updateClipPlane();
+  }
+  function toggleClipFlip() {
+    clipFlipped = !clipFlipped;
+    document.getElementById("clip-flip")?.classList.toggle("active", clipFlipped);
+    if (clipEnabled) updateClipPlane();
+  }
+  document.getElementById("clip-toggle")?.addEventListener("click", () => setClipEnabled(!clipEnabled));
+  document.getElementById("clip-axis-x")?.addEventListener("click", () => setClipAxis(0));
+  document.getElementById("clip-axis-y")?.addEventListener("click", () => setClipAxis(1));
+  document.getElementById("clip-axis-z")?.addEventListener("click", () => setClipAxis(2));
+  document.getElementById("clip-flip")?.addEventListener("click", toggleClipFlip);
+  document.getElementById("clip-slider")?.addEventListener("input", () => {
+    if (clipEnabled) updateClipPlane();
+  });
+  setClipAxis(0);
   function addLayer(fileName, geo) {
     init();
     document.getElementById("empty-state")?.style.setProperty("display", "none");
     const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
     const mat = new MeshPhongMaterial({ color, specular: 3359829, shininess: 40, side: DoubleSide });
+    if (clipEnabled) mat.clippingPlanes = [clipPlaneThree];
     const layerMesh = new Mesh(geo, mat);
     scene.add(layerMesh);
     layers.push({ id: nextLayerId++, name: fileName, mesh: layerMesh, visible: true });
     renderLayerList();
     fitCameraToLayers();
     updateLayerLabel();
+    if (clipEnabled) updateClipPlane();
   }
   function removeLayer(id) {
     const idx = layers.findIndex((l2) => l2.id === id);
@@ -26720,6 +26914,29 @@ void main() {
     const pan = right.multiplyScalar(-dx * panScale).add(up.multiplyScalar(dy * panScale));
     target.add(pan);
   }
+  var raycaster = new Raycaster();
+  function pickPoint(clientX, clientY) {
+    if (!camera) return null;
+    const rect = geoCanvas.getBoundingClientRect();
+    const ndc = new Vector2(
+      (clientX - rect.left) / rect.width * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    raycaster.setFromCamera(ndc, camera);
+    const meshes = layers.filter((l) => l.visible).map((l) => l.mesh);
+    const hits = raycaster.intersectObjects(meshes, false);
+    return hits.length ? hits[0].point : null;
+  }
+  function retargetTo(point) {
+    if (!camera) return;
+    const offset = camera.position.clone().sub(point);
+    const r = offset.length();
+    if (r < 1e-9) return;
+    target.copy(point);
+    sph.r = r;
+    sph.phi = Math.acos(Math.max(-1, Math.min(1, offset.z / r)));
+    sph.theta = Math.atan2(offset.y, offset.x);
+  }
   function init() {
     if (ready) return;
     const w = geoCanvas.clientWidth || 800;
@@ -26731,6 +26948,7 @@ void main() {
     renderer = new WebGLRenderer({ canvas: geoCanvas, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(w, h, false);
+    renderer.localClippingEnabled = true;
     scene.add(new AmbientLight(16777215, 0.5));
     const d1 = new DirectionalLight(16777215, 0.9);
     d1.position.set(5, 4, 10);
@@ -26743,7 +26961,11 @@ void main() {
       isDown = true;
       lx = e.clientX;
       ly = e.clientY;
-      dragMode = e.button === 2 || e.shiftKey ? "pan" : "rotate";
+      dragMode = e.button === 2 ? "pan" : "rotate";
+      if (dragMode === "rotate") {
+        const p = pickPoint(e.clientX, e.clientY);
+        if (p) retargetTo(p);
+      }
     });
     window.addEventListener("mouseup", () => isDown = false);
     window.addEventListener("mousemove", (e) => {
@@ -26761,7 +26983,7 @@ void main() {
       updateCamera();
     });
     geoCanvas.addEventListener("wheel", (e) => {
-      sph.r = Math.max(zoomMin, Math.min(zoomMax, sph.r * (e.deltaY > 0 ? 1.1 : 0.9)));
+      sph.r = Math.max(zoomMin, Math.min(zoomMax, sph.r * Math.exp(e.deltaY * 6e-4)));
       updateCamera();
       e.preventDefault();
     }, { passive: false });
@@ -27013,24 +27235,100 @@ void main() {
       imgEl.style.opacity = "0.15";
     }
   }
+  var ROTATE_STEP = Math.PI / 12;
+  var PAN_STEP_PX = 40;
+  function rotateStep(dTheta, dPhi) {
+    sph.theta += dTheta;
+    sph.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sph.phi + dPhi));
+    updateCamera();
+  }
+  function resetView() {
+    sph.theta = Math.PI / 4;
+    sph.phi = Math.PI / 3;
+    fitCameraToLayers();
+  }
+  var wireframeOn = false;
+  function toggleWireframe() {
+    wireframeOn = !wireframeOn;
+    for (const l of layers) {
+      l.mesh.material.wireframe = wireframeOn;
+    }
+    document.getElementById("nav-wireframe")?.classList.toggle("active", wireframeOn);
+    renderer?.render(scene, camera);
+  }
+  function takeScreenshot() {
+    if (!renderer || !scene || !camera) return;
+    renderer.render(scene, camera);
+    const dataUrl = geoCanvas.toDataURL("image/png");
+    window.vsApi?.postMessage({ command: "saveScreenshot", dataBase64: dataUrl.split(",")[1] });
+  }
+  var NAV_BUTTONS = [
+    ["nav-rot-left", () => rotateStep(ROTATE_STEP, 0)],
+    ["nav-rot-right", () => rotateStep(-ROTATE_STEP, 0)],
+    ["nav-tilt-up", () => rotateStep(0, -ROTATE_STEP)],
+    ["nav-tilt-down", () => rotateStep(0, ROTATE_STEP)],
+    ["nav-pan-left", () => {
+      panCamera(-PAN_STEP_PX, 0);
+      updateCamera();
+    }],
+    ["nav-pan-right", () => {
+      panCamera(PAN_STEP_PX, 0);
+      updateCamera();
+    }],
+    ["nav-pan-up", () => {
+      panCamera(0, -PAN_STEP_PX);
+      updateCamera();
+    }],
+    ["nav-pan-down", () => {
+      panCamera(0, PAN_STEP_PX);
+      updateCamera();
+    }],
+    ["nav-fit", () => fitCameraToLayers()],
+    ["nav-reset", resetView],
+    ["nav-wireframe", toggleWireframe],
+    ["nav-screenshot", takeScreenshot]
+  ];
+  for (const [id, fn] of NAV_BUTTONS) {
+    document.getElementById(id)?.addEventListener("click", fn);
+  }
+  var loadingEl = document.getElementById("loading-state");
+  var loadingTextEl = document.getElementById("loading-text");
+  function showLoading(fileName) {
+    if (loadingTextEl) loadingTextEl.textContent = fileName ? `Loading ${fileName}\u2026` : "Loading\u2026";
+    if (loadingEl) loadingEl.style.display = "flex";
+    document.getElementById("empty-state")?.style.setProperty("display", "none");
+  }
+  function hideLoading() {
+    if (loadingEl) loadingEl.style.display = "none";
+  }
+  function afterPaint(fn) {
+    requestAnimationFrame(() => requestAnimationFrame(fn));
+  }
   window.addEventListener("message", (ev) => {
     const msg = ev.data;
-    if (msg.command === "previewGeometry") {
-      try {
-        const bytes = b64ToBytes(msg.dataBase64);
-        const ext = (msg.fileName || "").toLowerCase();
-        let geo;
-        if (ext.endsWith(".obj")) {
-          geo = parseOBJ(bytes, false);
-        } else if (ext.endsWith(".vtk")) {
-          geo = parseVTK(bytes, false);
-        } else {
-          geo = parseSTL(bytes, msg.isBinary, false);
+    if (msg.command === "loading") {
+      showLoading(msg.fileName);
+    } else if (msg.command === "previewGeometry") {
+      showLoading(msg.fileName);
+      afterPaint(() => {
+        try {
+          const bytes = b64ToBytes(msg.dataBase64);
+          const ext = (msg.fileName || "").toLowerCase();
+          let geo;
+          if (ext.endsWith(".obj")) {
+            geo = parseOBJ(bytes, false);
+          } else if (ext.endsWith(".vtk")) {
+            geo = parseVTK(bytes, false);
+          } else {
+            geo = parseSTL(bytes, msg.isBinary, false);
+          }
+          addLayer(msg.fileName || `layer ${layers.length + 1}`, geo);
+        } catch (err) {
+          geoLabel.textContent = "Parse error: " + err.message;
+        } finally {
+          hideLoading();
         }
-        addLayer(msg.fileName || `layer ${layers.length + 1}`, geo);
-      } catch (err) {
-        geoLabel.textContent = "Parse error: " + err.message;
-      }
+      });
     } else if (msg.command === "clearLayers") {
       clearAllLayers();
     } else if (msg.command === "geoDataReady") {
@@ -27038,6 +27336,7 @@ void main() {
       if (img) renderMiniGeo(img, msg.dataBase64, msg.isBinary, msg.ext);
     }
   });
+  window.vsApi?.postMessage({ command: "ready" });
 })();
 /*! Bundled license information:
 

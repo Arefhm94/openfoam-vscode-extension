@@ -1903,11 +1903,11 @@
       callbacks.forEach(([cbID]) => off(cbID));
     };
   }
-  function newInstance(extend108, className) {
+  function newInstance(extend107, className) {
     const constructor = (initialValues = {}) => {
       const model = {};
       const publicAPI = {};
-      extend108(publicAPI, model, initialValues);
+      extend107(publicAPI, model, initialValues);
       return Object.freeze(publicAPI);
     };
     if (className) vtk.register(className, constructor);
@@ -31831,429 +31831,6 @@ void main()
     ...Constants_default17
   };
 
-  // node_modules/@kitware/vtk.js/Rendering/Core/InteractorStyle/Constants.js
-  var States = {
-    IS_START: 0,
-    IS_NONE: 0,
-    IS_ROTATE: 1,
-    IS_PAN: 2,
-    IS_SPIN: 3,
-    IS_DOLLY: 4,
-    IS_CAMERA_POSE: 11,
-    IS_WINDOW_LEVEL: 1024,
-    IS_SLICE: 1025
-  };
-  var Constants_default18 = { States };
-
-  // node_modules/@kitware/vtk.js/Rendering/Core/InteractorObserver.js
-  var { vtkErrorMacro: vtkErrorMacro34, VOID: VOID2 } = macros_default;
-  function computeWorldToDisplay(renderer2, x, y, z) {
-    return renderer2.getRenderWindow().getViews()[0].worldToDisplay(x, y, z, renderer2);
-  }
-  function computeDisplayToWorld(renderer2, x, y, z) {
-    return renderer2.getRenderWindow().getViews()[0].displayToWorld(x, y, z, renderer2);
-  }
-  var STATIC13 = {
-    computeWorldToDisplay,
-    computeDisplayToWorld
-  };
-  function vtkInteractorObserver(publicAPI, model) {
-    model.classHierarchy.push("vtkInteractorObserver");
-    const superClass = { ...publicAPI };
-    function unsubscribeFromEvents() {
-      while (model.subscribedEvents.length) model.subscribedEvents.pop().unsubscribe();
-    }
-    function subscribeToEvents() {
-      RenderWindowInteractor_default.handledEvents.forEach((eventName) => {
-        if (publicAPI[`handle${eventName}`]) model.subscribedEvents.push(model._interactor[`on${eventName}`]((callData) => {
-          if (model.processEvents) return publicAPI[`handle${eventName}`](callData);
-          return VOID2;
-        }, model.priority));
-      });
-    }
-    publicAPI.setInteractor = (i) => {
-      if (i === model._interactor) return;
-      unsubscribeFromEvents();
-      model._interactor = i;
-      if (i && model.enabled) subscribeToEvents();
-      publicAPI.modified();
-    };
-    publicAPI.setEnabled = (enable) => {
-      if (enable === model.enabled) return;
-      unsubscribeFromEvents();
-      if (enable) if (model._interactor) subscribeToEvents();
-      else vtkErrorMacro34(`
-          The interactor must be set before subscribing to events
-        `);
-      model.enabled = enable;
-      publicAPI.modified();
-    };
-    publicAPI.computeDisplayToWorld = (renderer2, x, y, z) => {
-      if (!renderer2) return null;
-      return model._interactor.getView().displayToWorld(x, y, z, renderer2);
-    };
-    publicAPI.computeWorldToDisplay = (renderer2, x, y, z) => {
-      if (!renderer2) return null;
-      return model._interactor.getView().worldToDisplay(x, y, z, renderer2);
-    };
-    publicAPI.setPriority = (priority) => {
-      if (superClass.setPriority(priority) && model._interactor) {
-        unsubscribeFromEvents();
-        subscribeToEvents();
-      }
-    };
-  }
-  var DEFAULT_VALUES98 = {
-    enabled: true,
-    priority: 0,
-    processEvents: true,
-    subscribedEvents: []
-  };
-  function extend104(publicAPI, model, initialValues = {}) {
-    Object.assign(model, DEFAULT_VALUES98, initialValues);
-    macros_default.obj(publicAPI, model);
-    macros_default.event(publicAPI, model, "InteractionEvent");
-    macros_default.event(publicAPI, model, "StartInteractionEvent");
-    macros_default.event(publicAPI, model, "EndInteractionEvent");
-    macros_default.get(publicAPI, model, ["_interactor", "enabled"]);
-    macros_default.setGet(publicAPI, model, ["priority", "processEvents"]);
-    macros_default.moveToProtected(publicAPI, model, ["interactor"]);
-    vtkInteractorObserver(publicAPI, model);
-  }
-  var newInstance100 = macros_default.newInstance(extend104, "vtkInteractorObserver");
-  var InteractorObserver_default = {
-    newInstance: newInstance100,
-    extend: extend104,
-    ...STATIC13
-  };
-
-  // node_modules/@kitware/vtk.js/Rendering/Core/InteractorStyle.js
-  var { States: States2 } = Constants_default18;
-  var stateNames = {
-    Rotate: States2.IS_ROTATE,
-    Pan: States2.IS_PAN,
-    Spin: States2.IS_SPIN,
-    Dolly: States2.IS_DOLLY,
-    CameraPose: States2.IS_CAMERA_POSE,
-    WindowLevel: States2.IS_WINDOW_LEVEL,
-    Slice: States2.IS_SLICE
-  };
-  function vtkInteractorStyle(publicAPI, model) {
-    model.classHierarchy.push("vtkInteractorStyle");
-    Object.keys(stateNames).forEach((key) => {
-      macros_default.event(publicAPI, model, `Start${key}Event`);
-      publicAPI[`start${key}`] = () => {
-        if (model.state !== States2.IS_NONE) return;
-        model.state = stateNames[key];
-        model._interactor.requestAnimation(publicAPI);
-        publicAPI.invokeStartInteractionEvent({ type: "StartInteractionEvent" });
-        publicAPI[`invokeStart${key}Event`]({ type: `Start${key}Event` });
-      };
-      macros_default.event(publicAPI, model, `End${key}Event`);
-      publicAPI[`end${key}`] = () => {
-        if (model.state !== stateNames[key]) return;
-        model.state = States2.IS_NONE;
-        model._interactor.cancelAnimation(publicAPI);
-        publicAPI.invokeEndInteractionEvent({ type: "EndInteractionEvent" });
-        publicAPI[`invokeEnd${key}Event`]({ type: `End${key}Event` });
-        model._interactor.render();
-      };
-    });
-    model.getRenderer = (callData) => model.focusedRenderer || callData.pokedRenderer;
-    publicAPI.handleKeyPress = (callData) => {
-      const rwi = model._interactor;
-      let ac = null;
-      switch (callData.key) {
-        case "r":
-        case "R":
-          model.getRenderer(callData).resetCamera();
-          rwi.render();
-          break;
-        case "w":
-        case "W":
-          ac = model.getRenderer(callData).getActors();
-          ac.forEach((anActor) => {
-            const prop = anActor.getProperty();
-            if (prop.setRepresentationToWireframe) prop.setRepresentationToWireframe();
-          });
-          rwi.render();
-          break;
-        case "s":
-        case "S":
-          ac = model.getRenderer(callData).getActors();
-          ac.forEach((anActor) => {
-            const prop = anActor.getProperty();
-            if (prop.setRepresentationToSurface) prop.setRepresentationToSurface();
-          });
-          rwi.render();
-          break;
-        case "v":
-        case "V":
-          ac = model.getRenderer(callData).getActors();
-          ac.forEach((anActor) => {
-            const prop = anActor.getProperty();
-            if (prop.setRepresentationToPoints) prop.setRepresentationToPoints();
-          });
-          rwi.render();
-          break;
-        default:
-          break;
-      }
-    };
-  }
-  var DEFAULT_VALUES99 = {
-    state: States2.IS_NONE,
-    handleObservers: 1,
-    autoAdjustCameraClippingRange: 1
-  };
-  function extend105(publicAPI, model, initialValues = {}) {
-    Object.assign(model, DEFAULT_VALUES99, initialValues);
-    InteractorObserver_default.extend(publicAPI, model, initialValues);
-    macros_default.setGet(publicAPI, model, ["focusedRenderer"]);
-    vtkInteractorStyle(publicAPI, model);
-  }
-  var newInstance101 = macros_default.newInstance(extend105, "vtkInteractorStyle");
-  var InteractorStyle_default = {
-    newInstance: newInstance101,
-    extend: extend105,
-    ...Constants_default18
-  };
-
-  // node_modules/@kitware/vtk.js/Interaction/Style/InteractorStyleTrackballCamera.js
-  var { States: States3 } = Constants_default18;
-  function vtkInteractorStyleTrackballCamera(publicAPI, model) {
-    model.classHierarchy.push("vtkInteractorStyleTrackballCamera");
-    publicAPI.handleMouseMove = (callData) => {
-      const pos = callData.position;
-      const renderer2 = model.getRenderer(callData);
-      switch (model.state) {
-        case States3.IS_ROTATE:
-          publicAPI.handleMouseRotate(renderer2, pos);
-          publicAPI.invokeInteractionEvent({ type: "InteractionEvent" });
-          break;
-        case States3.IS_PAN:
-          publicAPI.handleMousePan(renderer2, pos);
-          publicAPI.invokeInteractionEvent({ type: "InteractionEvent" });
-          break;
-        case States3.IS_DOLLY:
-          if (!model.wheelDolly) {
-            publicAPI.handleMouseDolly(renderer2, pos);
-            publicAPI.invokeInteractionEvent({ type: "InteractionEvent" });
-          }
-          break;
-        case States3.IS_SPIN:
-          publicAPI.handleMouseSpin(renderer2, pos);
-          publicAPI.invokeInteractionEvent({ type: "InteractionEvent" });
-          break;
-        default:
-          break;
-      }
-      model.previousPosition = pos;
-    };
-    publicAPI.handleButton3D = (ed) => {
-      if (ed && ed.pressed && ed.device === Device.RightController && (ed.input === Input.Trigger || ed.input === Input.TrackPad)) {
-        publicAPI.startCameraPose();
-        return;
-      }
-      if (ed && !ed.pressed && ed.device === Device.RightController && (ed.input === Input.Trigger || ed.input === Input.TrackPad) && model.state === States3.IS_CAMERA_POSE) publicAPI.endCameraPose();
-    };
-    publicAPI.handleMove3D = (ed) => {
-      switch (model.state) {
-        case States3.IS_CAMERA_POSE:
-          publicAPI.updateCameraPose(ed);
-          break;
-        default:
-      }
-    };
-    publicAPI.updateCameraPose = (ed) => {
-      const camera = model.getRenderer(ed).getActiveCamera();
-      const oldTrans = camera.getPhysicalTranslation();
-      const pscale = 0.5 * 0.05 * camera.getPhysicalScale();
-      const dir = camera.physicalOrientationToWorldDirection([
-        ed.orientation.x,
-        ed.orientation.y,
-        ed.orientation.z,
-        ed.orientation.w
-      ]);
-      camera.setPhysicalTranslation(oldTrans[0] + dir[0] * pscale, oldTrans[1] + dir[1] * pscale, oldTrans[2] + dir[2] * pscale);
-    };
-    publicAPI.handleLeftButtonPress = (callData) => {
-      model.previousPosition = callData.position;
-      if (callData.shiftKey) if (callData.controlKey || callData.altKey) publicAPI.startDolly();
-      else publicAPI.startPan();
-      else if (callData.controlKey || callData.altKey) publicAPI.startSpin();
-      else publicAPI.startRotate();
-    };
-    publicAPI.handleLeftButtonRelease = () => {
-      switch (model.state) {
-        case States3.IS_DOLLY:
-          publicAPI.endDolly();
-          break;
-        case States3.IS_PAN:
-          publicAPI.endPan();
-          break;
-        case States3.IS_SPIN:
-          publicAPI.endSpin();
-          break;
-        case States3.IS_ROTATE:
-          publicAPI.endRotate();
-          break;
-        default:
-          break;
-      }
-    };
-    publicAPI.handleStartMouseWheel = () => {
-      model.wheelDolly = true;
-      publicAPI.startDolly();
-    };
-    publicAPI.handleEndMouseWheel = () => {
-      publicAPI.endDolly();
-      model.wheelDolly = false;
-    };
-    publicAPI.handleStartPinch = (callData) => {
-      model.previousScale = callData.scale;
-      publicAPI.startDolly();
-    };
-    publicAPI.handleEndPinch = () => {
-      publicAPI.endDolly();
-    };
-    publicAPI.handleStartRotate = (callData) => {
-      model.previousRotation = callData.rotation;
-      publicAPI.startRotate();
-    };
-    publicAPI.handleEndRotate = () => {
-      publicAPI.endRotate();
-    };
-    publicAPI.handleStartPan = (callData) => {
-      model.previousTranslation = callData.translation;
-      publicAPI.startPan();
-    };
-    publicAPI.handleEndPan = () => {
-      publicAPI.endPan();
-    };
-    publicAPI.handlePinch = (callData) => {
-      publicAPI.dollyByFactor(model.getRenderer(callData), callData.scale / model.previousScale);
-      model.previousScale = callData.scale;
-    };
-    publicAPI.handlePan = (callData) => {
-      const camera = model.getRenderer(callData).getActiveCamera();
-      let viewFocus = camera.getFocalPoint();
-      viewFocus = publicAPI.computeWorldToDisplay(model.getRenderer(callData), viewFocus[0], viewFocus[1], viewFocus[2]);
-      const focalDepth = viewFocus[2];
-      const trans = callData.translation;
-      const lastTrans = model.previousTranslation;
-      const newPickPoint = publicAPI.computeDisplayToWorld(model.getRenderer(callData), viewFocus[0] + trans[0] - lastTrans[0], viewFocus[1] + trans[1] - lastTrans[1], focalDepth);
-      const oldPickPoint = publicAPI.computeDisplayToWorld(model.getRenderer(callData), viewFocus[0], viewFocus[1], focalDepth);
-      const motionVector = [];
-      motionVector[0] = oldPickPoint[0] - newPickPoint[0];
-      motionVector[1] = oldPickPoint[1] - newPickPoint[1];
-      motionVector[2] = oldPickPoint[2] - newPickPoint[2];
-      viewFocus = camera.getFocalPoint();
-      const viewPoint = camera.getPosition();
-      camera.setFocalPoint(motionVector[0] + viewFocus[0], motionVector[1] + viewFocus[1], motionVector[2] + viewFocus[2]);
-      camera.setPosition(motionVector[0] + viewPoint[0], motionVector[1] + viewPoint[1], motionVector[2] + viewPoint[2]);
-      if (model._interactor.getLightFollowCamera()) model.getRenderer(callData).updateLightsGeometryToFollowCamera();
-      camera.orthogonalizeViewUp();
-      model.previousTranslation = callData.translation;
-    };
-    publicAPI.handleRotate = (callData) => {
-      const camera = model.getRenderer(callData).getActiveCamera();
-      camera.roll(callData.rotation - model.previousRotation);
-      camera.orthogonalizeViewUp();
-      model.previousRotation = callData.rotation;
-    };
-    publicAPI.handleMouseRotate = (renderer2, position) => {
-      if (!model.previousPosition) return;
-      const rwi = model._interactor;
-      const dx = position.x - model.previousPosition.x;
-      const dy = position.y - model.previousPosition.y;
-      const size = rwi.getView().getViewportSize(renderer2);
-      let deltaElevation = -0.1;
-      let deltaAzimuth = -0.1;
-      if (size[0] && size[1]) {
-        deltaElevation = -20 / size[1];
-        deltaAzimuth = -20 / size[0];
-      }
-      const rxf = dx * deltaAzimuth * model.motionFactor;
-      const ryf = dy * deltaElevation * model.motionFactor;
-      const camera = renderer2.getActiveCamera();
-      if (!Number.isNaN(rxf) && !Number.isNaN(ryf)) {
-        camera.azimuth(rxf);
-        camera.elevation(ryf);
-        camera.orthogonalizeViewUp();
-      }
-      if (model.autoAdjustCameraClippingRange) renderer2.resetCameraClippingRange();
-      if (rwi.getLightFollowCamera()) renderer2.updateLightsGeometryToFollowCamera();
-    };
-    publicAPI.handleMouseSpin = (renderer2, position) => {
-      if (!model.previousPosition) return;
-      const rwi = model._interactor;
-      const camera = renderer2.getActiveCamera();
-      const center = rwi.getView().getViewportCenter(renderer2);
-      const oldAngle = degreesFromRadians(Math.atan2(model.previousPosition.y - center[1], model.previousPosition.x - center[0]));
-      const newAngle = degreesFromRadians(Math.atan2(position.y - center[1], position.x - center[0])) - oldAngle;
-      if (!Number.isNaN(newAngle)) {
-        camera.roll(newAngle);
-        camera.orthogonalizeViewUp();
-      }
-    };
-    publicAPI.handleMousePan = (renderer2, position) => {
-      if (!model.previousPosition) return;
-      const camera = renderer2.getActiveCamera();
-      let viewFocus = camera.getFocalPoint();
-      viewFocus = publicAPI.computeWorldToDisplay(renderer2, viewFocus[0], viewFocus[1], viewFocus[2]);
-      const focalDepth = viewFocus[2];
-      const newPickPoint = publicAPI.computeDisplayToWorld(renderer2, position.x, position.y, focalDepth);
-      const oldPickPoint = publicAPI.computeDisplayToWorld(renderer2, model.previousPosition.x, model.previousPosition.y, focalDepth);
-      const motionVector = [];
-      motionVector[0] = oldPickPoint[0] - newPickPoint[0];
-      motionVector[1] = oldPickPoint[1] - newPickPoint[1];
-      motionVector[2] = oldPickPoint[2] - newPickPoint[2];
-      viewFocus = camera.getFocalPoint();
-      const viewPoint = camera.getPosition();
-      camera.setFocalPoint(motionVector[0] + viewFocus[0], motionVector[1] + viewFocus[1], motionVector[2] + viewFocus[2]);
-      camera.setPosition(motionVector[0] + viewPoint[0], motionVector[1] + viewPoint[1], motionVector[2] + viewPoint[2]);
-      if (model._interactor.getLightFollowCamera()) renderer2.updateLightsGeometryToFollowCamera();
-    };
-    publicAPI.handleMouseDolly = (renderer2, position) => {
-      if (!model.previousPosition) return;
-      const dy = position.y - model.previousPosition.y;
-      const center = model._interactor.getView().getViewportCenter(renderer2);
-      const dyf = model.motionFactor * dy / center[1];
-      publicAPI.dollyByFactor(renderer2, 1.1 ** dyf);
-    };
-    publicAPI.handleMouseWheel = (callData) => {
-      const dyf = Math.exp(-callData.spinY / model.zoomFactor);
-      publicAPI.dollyByFactor(model.getRenderer(callData), dyf);
-    };
-    publicAPI.dollyByFactor = (renderer2, factor) => {
-      if (Number.isNaN(factor)) return;
-      const camera = renderer2.getActiveCamera();
-      if (camera.getParallelProjection()) camera.setParallelScale(camera.getParallelScale() / factor);
-      else {
-        camera.dolly(factor);
-        if (model.autoAdjustCameraClippingRange) renderer2.resetCameraClippingRange();
-      }
-      if (model._interactor.getLightFollowCamera()) renderer2.updateLightsGeometryToFollowCamera();
-    };
-  }
-  var DEFAULT_VALUES100 = {
-    motionFactor: 10,
-    zoomFactor: 10,
-    wheelDolly: false
-  };
-  function extend106(publicAPI, model, initialValues = {}) {
-    Object.assign(model, DEFAULT_VALUES100, initialValues);
-    InteractorStyle_default.extend(publicAPI, model, initialValues);
-    macros_default.setGet(publicAPI, model, ["motionFactor", "zoomFactor"]);
-    vtkInteractorStyleTrackballCamera(publicAPI, model);
-  }
-  var newInstance102 = macros_default.newInstance(extend106, "vtkInteractorStyleTrackballCamera");
-  var InteractorStyleTrackballCamera_default = {
-    newInstance: newInstance102,
-    extend: extend106
-  };
-
   // node_modules/@kitware/vtk.js/Rendering/Core/ColorTransferFunction/Constants.js
   var ColorSpace = {
     RGB: 0,
@@ -32265,15 +31842,15 @@ void main()
     LINEAR: 0,
     LOG10: 1
   };
-  var Constants_default19 = {
+  var Constants_default18 = {
     ColorSpace,
     Scale: Scale3
   };
 
   // node_modules/@kitware/vtk.js/Rendering/Core/ColorTransferFunction.js
-  var { ColorSpace: ColorSpace2, Scale: Scale4 } = Constants_default19;
+  var { ColorSpace: ColorSpace2, Scale: Scale4 } = Constants_default18;
   var { ScalarMappingTarget: ScalarMappingTarget3 } = ScalarsToColors_default;
-  var { vtkDebugMacro: vtkDebugMacro10, vtkErrorMacro: vtkErrorMacro35, vtkWarningMacro: vtkWarningMacro12 } = macros_default;
+  var { vtkDebugMacro: vtkDebugMacro10, vtkErrorMacro: vtkErrorMacro34, vtkWarningMacro: vtkWarningMacro12 } = macros_default;
   function vtkColorTransferFunctionLabToMsh(lab, msh) {
     const L = lab[0];
     const a = lab[1];
@@ -32347,11 +31924,11 @@ void main()
     publicAPI.addRGBPoint = (x, r, g, b) => publicAPI.addRGBPointLong(x, r, g, b, 0.5, 0);
     publicAPI.addRGBPointLong = (x, r, g, b, midpoint = 0.5, sharpness = 0) => {
       if (midpoint < 0 || midpoint > 1) {
-        vtkErrorMacro35("Midpoint outside range [0.0, 1.0]");
+        vtkErrorMacro34("Midpoint outside range [0.0, 1.0]");
         return -1;
       }
       if (sharpness < 0 || sharpness > 1) {
-        vtkErrorMacro35("Sharpness outside range [0.0, 1.0]");
+        vtkErrorMacro34("Sharpness outside range [0.0, 1.0]");
         return -1;
       }
       if (!model.allowDuplicateScalars) publicAPI.removePoint(x);
@@ -32680,7 +32257,7 @@ void main()
               table[tidx] = tmpVec[0];
               table[tidx + 1] = tmpVec[1];
               table[tidx + 2] = tmpVec[2];
-            } else vtkErrorMacro35("ColorSpace set to invalid value.", model.colorSpace);
+            } else vtkErrorMacro34("ColorSpace set to invalid value.", model.colorSpace);
             continue;
           }
           if (s < 0.5) s = 0.5 * (s * 2) ** (1 + 10 * sharpness);
@@ -32736,7 +32313,7 @@ void main()
             table[tidx] = tmpVec[0];
             table[tidx + 1] = tmpVec[1];
             table[tidx + 2] = tmpVec[2];
-          } else vtkErrorMacro35("ColorSpace set to invalid value.");
+          } else vtkErrorMacro34("ColorSpace set to invalid value.");
           for (let j = 0; j < 3; j++) {
             table[tidx + j] = table[tidx + j] < 0 ? 0 : table[tidx + j];
             table[tidx + j] = table[tidx + j] > 1 ? 1 : table[tidx + j];
@@ -32747,7 +32324,7 @@ void main()
     publicAPI.getUint8Table = (xStart, xEnd, size, withAlpha = false) => {
       if (publicAPI.getMTime() <= model.buildTime && model.tableSize === size && model.tableWithAlpha !== withAlpha) return model.table;
       if (model.nodes.length === 0) {
-        vtkErrorMacro35("Attempting to lookup a value with no points in the function");
+        vtkErrorMacro34("Attempting to lookup a value with no points in the function");
         return model.table;
       }
       const nbChannels = withAlpha ? 4 : 3;
@@ -32835,7 +32412,7 @@ void main()
     };
     publicAPI.getNodeValue = (index, val) => {
       if (index < 0 || index >= model.nodes.length) {
-        vtkErrorMacro35("Index out of range!");
+        vtkErrorMacro34("Index out of range!");
         return -1;
       }
       val[0] = model.nodes[index].x;
@@ -32848,7 +32425,7 @@ void main()
     };
     publicAPI.setNodeValue = (index, val) => {
       if (index < 0 || index >= model.nodes.length) {
-        vtkErrorMacro35("Index out of range!");
+        vtkErrorMacro34("Index out of range!");
         return -1;
       }
       const oldX = model.nodes[index].x;
@@ -32895,7 +32472,7 @@ void main()
       const logScaleEnabled = publicAPI.logScaleEnabled();
       if (originalRange[1] === range[1] && originalRange[0] === range[0]) return;
       if (range[1] === range[0]) {
-        vtkErrorMacro35("attempt to set zero width color range");
+        vtkErrorMacro34("attempt to set zero width color range");
         return;
       }
       if (logScaleEnabled) if (range[0] <= 0) console.warn("attempt to set log scale color range with non-positive minimum");
@@ -32996,7 +32573,7 @@ void main()
       if (colorMap.ColorSpace) {
         model.colorSpace = ColorSpace2[colorMap.ColorSpace.toUpperCase()];
         if (model.colorSpace === void 0) {
-          vtkErrorMacro35(`ColorSpace ${colorMap.ColorSpace} not supported, using RGB instead`);
+          vtkErrorMacro34(`ColorSpace ${colorMap.ColorSpace} not supported, using RGB instead`);
           model.colorSpace = ColorSpace2.RGB;
         }
       }
@@ -33031,7 +32608,7 @@ void main()
       return model.nodes;
     };
   }
-  var DEFAULT_VALUES101 = {
+  var DEFAULT_VALUES98 = {
     clamping: true,
     colorSpace: ColorSpace2.RGB,
     hSVWrap: true,
@@ -33049,8 +32626,8 @@ void main()
     discretize: false,
     numberOfValues: 256
   };
-  function extend107(publicAPI, model, initialValues = {}) {
-    Object.assign(model, DEFAULT_VALUES101, initialValues);
+  function extend104(publicAPI, model, initialValues = {}) {
+    Object.assign(model, DEFAULT_VALUES98, initialValues);
     ScalarsToColors_default.extend(publicAPI, model, initialValues);
     model.table = [];
     model.nodes = [];
@@ -33103,21 +32680,305 @@ void main()
     ]);
     vtkColorTransferFunction(publicAPI, model);
   }
-  var newInstance103 = macros_default.newInstance(extend107, "vtkColorTransferFunction");
+  var newInstance100 = macros_default.newInstance(extend104, "vtkColorTransferFunction");
   var ColorTransferFunction_default = {
-    newInstance: newInstance103,
-    extend: extend107,
-    ...Constants_default19
+    newInstance: newInstance100,
+    extend: extend104,
+    ...Constants_default18
+  };
+
+  // node_modules/@kitware/vtk.js/Rendering/Core/AbstractPicker.js
+  function vtkAbstractPicker(publicAPI, model) {
+    model.classHierarchy.push("vtkAbstractPicker");
+    publicAPI.initialize = () => {
+      model.renderer = null;
+      model.selectionPoint[0] = 0;
+      model.selectionPoint[1] = 0;
+      model.selectionPoint[2] = 0;
+      model.pickPosition[0] = 0;
+      model.pickPosition[1] = 0;
+      model.pickPosition[2] = 0;
+    };
+    publicAPI.initializePickList = () => {
+      model.pickList = [];
+    };
+    publicAPI.addPickList = (actor2) => {
+      model.pickList.push(actor2);
+    };
+    publicAPI.deletePickList = (actor2) => {
+      const i = model.pickList.indexOf(actor2);
+      if (i !== -1) model.pickList.splice(i, 1);
+    };
+  }
+  var DEFAULT_VALUES99 = {
+    renderer: null,
+    selectionPoint: [
+      0,
+      0,
+      0
+    ],
+    pickPosition: [
+      0,
+      0,
+      0
+    ],
+    pickFromList: false,
+    pickList: []
+  };
+  function extend105(publicAPI, model, initialValues = {}) {
+    Object.assign(model, DEFAULT_VALUES99, initialValues);
+    macros_default.obj(publicAPI, model);
+    macros_default.get(publicAPI, model, ["renderer"]);
+    macros_default.getArray(publicAPI, model, ["selectionPoint", "pickPosition"]);
+    macros_default.setGet(publicAPI, model, ["pickFromList", "pickList"]);
+    vtkAbstractPicker(publicAPI, model);
+  }
+  var newInstance101 = macros_default.newInstance(extend105, "vtkAbstractPicker");
+  var AbstractPicker_default = {
+    newInstance: newInstance101,
+    extend: extend105
+  };
+
+  // node_modules/@kitware/vtk.js/Rendering/Core/Picker.js
+  var { vtkErrorMacro: vtkErrorMacro35 } = macros_default;
+  var { vtkWarningMacro: vtkWarningMacro13 } = macros_default;
+  function vtkPicker(publicAPI, model) {
+    model.classHierarchy.push("vtkPicker");
+    const superClass = { ...publicAPI };
+    function initialize() {
+      superClass.initialize();
+      model.actors = [];
+      model.pickedPositions = [];
+      model.mapperPosition[0] = 0;
+      model.mapperPosition[1] = 0;
+      model.mapperPosition[2] = 0;
+      model.mapper = null;
+      model.dataSet = null;
+      model.globalTMin = Number.MAX_VALUE;
+    }
+    function computeTolerance(selectionZ, aspect, renderer2) {
+      let tolerance = 0;
+      const view = renderer2.getRenderWindow().getViews()[0];
+      const viewport = renderer2.getViewport();
+      const winSize = view.getSize();
+      let x = winSize[0] * viewport[0];
+      let y = winSize[1] * viewport[1];
+      const normalizedLeftDisplay = view.displayToNormalizedDisplay(x, y, selectionZ);
+      const windowLowerLeft = renderer2.normalizedDisplayToWorld(normalizedLeftDisplay[0], normalizedLeftDisplay[1], normalizedLeftDisplay[2], aspect);
+      x = winSize[0] * viewport[2];
+      y = winSize[1] * viewport[3];
+      const normalizedRightDisplay = view.displayToNormalizedDisplay(x, y, selectionZ);
+      const windowUpperRight = renderer2.normalizedDisplayToWorld(normalizedRightDisplay[0], normalizedRightDisplay[1], normalizedRightDisplay[2], aspect);
+      for (let i = 0; i < 3; i++) tolerance += (windowUpperRight[i] - windowLowerLeft[i]) * (windowUpperRight[i] - windowLowerLeft[i]);
+      return Math.sqrt(tolerance);
+    }
+    function pick3DInternal(renderer2, tolerance, p1World, p2World) {
+      const p1Mapper = new Float64Array(4);
+      const p2Mapper = new Float64Array(4);
+      const ray = [];
+      const hitPosition = [];
+      const props = model.pickFromList ? model.pickList : renderer2.getActors();
+      const transformScale = new Float64Array(3);
+      const pickedPosition = new Float64Array(3);
+      props.forEach((prop) => {
+        const mapper2 = prop.getMapper();
+        const propIsFullyTranslucent = prop.getProperty?.().getOpacity?.() === 0;
+        if (!(prop.getNestedPickable() && prop.getNestedVisibility() && !propIsFullyTranslucent)) return;
+        model.transformMatrix = prop.getMatrix().slice(0);
+        mat4_exports.transpose(model.transformMatrix, model.transformMatrix);
+        mat4_exports.invert(model.transformMatrix, model.transformMatrix);
+        vec4_exports.transformMat4(p1Mapper, p1World, model.transformMatrix);
+        vec4_exports.transformMat4(p2Mapper, p2World, model.transformMatrix);
+        vec3_exports.scale(p1Mapper, p1Mapper, 1 / p1Mapper[3]);
+        vec3_exports.scale(p2Mapper, p2Mapper, 1 / p2Mapper[3]);
+        subtract(p2Mapper, p1Mapper, ray);
+        const bounds = mapper2 ? BoundingBox_default.inflate(mapper2.getBounds(), tolerance) : [...BoundingBox_default.INIT_BOUNDS];
+        if (BoundingBox_default.intersectBox(bounds, p1Mapper, ray, hitPosition, [])) {
+          mat4_exports.getScaling(transformScale, model.transformMatrix);
+          const t = model.intersectWithLine(p1Mapper, p2Mapper, tolerance * 0.333 * (transformScale[0] + transformScale[1] + transformScale[2]), prop, mapper2);
+          if (t < Number.MAX_VALUE) {
+            pickedPosition[0] = (1 - t) * p1World[0] + t * p2World[0];
+            pickedPosition[1] = (1 - t) * p1World[1] + t * p2World[1];
+            pickedPosition[2] = (1 - t) * p1World[2] + t * p2World[2];
+            const actorIndex = model.actors.indexOf(prop);
+            if (actorIndex !== -1) {
+              const previousPickedPosition = model.pickedPositions[actorIndex];
+              if (distance2BetweenPoints(p1World, pickedPosition) < distance2BetweenPoints(p1World, previousPickedPosition)) model.pickedPositions[actorIndex] = pickedPosition.slice(0);
+            } else {
+              model.actors.push(prop);
+              model.pickedPositions.push(pickedPosition.slice(0));
+            }
+          }
+        }
+      });
+      const tempArray = [];
+      for (let i = 0; i < model.pickedPositions.length; i++) tempArray.push({
+        actor: model.actors[i],
+        pickedPosition: model.pickedPositions[i],
+        distance2: distance2BetweenPoints(p1World, model.pickedPositions[i])
+      });
+      tempArray.sort((a, b) => {
+        const keyA = a.distance2;
+        const keyB = b.distance2;
+        if (keyA < keyB) return -1;
+        if (keyA > keyB) return 1;
+        return 0;
+      });
+      model.pickedPositions = [];
+      model.actors = [];
+      tempArray.forEach((obj2) => {
+        model.pickedPositions.push(obj2.pickedPosition);
+        model.actors.push(obj2.actor);
+      });
+    }
+    model.intersectWithLine = (p1, p2, tolerance, prop, mapper2) => {
+      if (!mapper2) return Number.MAX_VALUE;
+      const center = mapper2.getCenter();
+      const ray = vec3_exports.subtract(new Float64Array(3), p2, p1);
+      const rayFactor = dot(ray, ray);
+      if (rayFactor === 0) return 2;
+      return (ray[0] * (center[0] - p1[0]) + ray[1] * (center[1] - p1[1]) + ray[2] * (center[2] - p1[2])) / rayFactor;
+    };
+    publicAPI.pick = (selection, renderer2) => {
+      if (selection.length !== 3) vtkWarningMacro13("vtkPicker.pick - selection needs three components");
+      if (!renderer2) {
+        vtkErrorMacro35("vtkPicker.pick - renderer cannot be null");
+        throw new Error("renderer cannot be null");
+      }
+      initialize();
+      const selectionX = selection[0];
+      const selectionY = selection[1];
+      let selectionZ = selection[2];
+      model.renderer = renderer2;
+      model.selectionPoint[0] = selectionX;
+      model.selectionPoint[1] = selectionY;
+      model.selectionPoint[2] = selectionZ;
+      const p1World = new Float64Array(4);
+      const p2World = new Float64Array(4);
+      const camera = renderer2.getActiveCamera();
+      const cameraPos = camera.getPosition();
+      const cameraFP = camera.getFocalPoint();
+      const view = renderer2.getRenderWindow().getViews()[0];
+      const dims = view.getViewportSize(renderer2);
+      if (dims[1] === 0) {
+        vtkWarningMacro13("vtkPicker.pick - viewport area is 0");
+        return;
+      }
+      const aspect = dims[0] / dims[1];
+      let displayCoords = [];
+      displayCoords = renderer2.worldToNormalizedDisplay(cameraFP[0], cameraFP[1], cameraFP[2], aspect);
+      displayCoords = view.normalizedDisplayToDisplay(displayCoords[0], displayCoords[1], displayCoords[2]);
+      selectionZ = displayCoords[2];
+      const normalizedDisplay = view.displayToNormalizedDisplay(selectionX, selectionY, selectionZ);
+      const worldCoords = renderer2.normalizedDisplayToWorld(normalizedDisplay[0], normalizedDisplay[1], normalizedDisplay[2], aspect);
+      for (let i = 0; i < 3; i++) model.pickPosition[i] = worldCoords[i];
+      const ray = [];
+      for (let i = 0; i < 3; i++) ray[i] = model.pickPosition[i] - cameraPos[i];
+      const cameraDOP = [];
+      for (let i = 0; i < 3; i++) cameraDOP[i] = cameraFP[i] - cameraPos[i];
+      normalize(cameraDOP);
+      const rayLength = dot(cameraDOP, ray);
+      if (rayLength === 0) {
+        vtkWarningMacro13("Picker::Pick Cannot process points");
+        return;
+      }
+      const clipRange = camera.getClippingRange();
+      let tF;
+      let tB;
+      if (camera.getParallelProjection()) {
+        tF = clipRange[0] - rayLength;
+        tB = clipRange[1] - rayLength;
+        for (let i = 0; i < 3; i++) {
+          p1World[i] = model.pickPosition[i] + tF * cameraDOP[i];
+          p2World[i] = model.pickPosition[i] + tB * cameraDOP[i];
+        }
+      } else {
+        tF = clipRange[0] / rayLength;
+        tB = clipRange[1] / rayLength;
+        for (let i = 0; i < 3; i++) {
+          p1World[i] = cameraPos[i] + tF * ray[i];
+          p2World[i] = cameraPos[i] + tB * ray[i];
+        }
+      }
+      p1World[3] = 1;
+      p2World[3] = 1;
+      const tolerance = computeTolerance(selectionZ, aspect, renderer2) * model.tolerance;
+      pick3DInternal(model.renderer, tolerance, p1World, p2World);
+    };
+    publicAPI.pick3DPoint = (selectionPoint, focalPoint, renderer2) => {
+      if (!renderer2) throw new Error("renderer cannot be null");
+      initialize();
+      model.renderer = renderer2;
+      vec3_exports.copy(model.selectionPoint, selectionPoint);
+      const dims = renderer2.getRenderWindow().getViews()[0].getViewportSize(renderer2);
+      if (dims[1] === 0) {
+        vtkWarningMacro13("vtkPicker.pick3DPoint - viewport area is 0");
+        return;
+      }
+      const aspect = dims[0] / dims[1];
+      pick3DInternal(renderer2, computeTolerance(model.selectionPoint[2], aspect, renderer2) * model.tolerance, selectionPoint, focalPoint);
+    };
+  }
+  var DEFAULT_VALUES100 = {
+    tolerance: 0.025,
+    mapperPosition: [
+      0,
+      0,
+      0
+    ],
+    mapper: null,
+    dataSet: null,
+    actors: [],
+    pickedPositions: [],
+    transformMatrix: null,
+    globalTMin: Number.MAX_VALUE
+  };
+  function extend106(publicAPI, model, initialValues = {}) {
+    Object.assign(model, DEFAULT_VALUES100, initialValues);
+    AbstractPicker_default.extend(publicAPI, model, initialValues);
+    macros_default.setGet(publicAPI, model, ["tolerance"]);
+    macros_default.setGetArray(publicAPI, model, ["mapperPosition"], 3);
+    macros_default.get(publicAPI, model, [
+      "mapper",
+      "dataSet",
+      "actors",
+      "pickedPositions"
+    ]);
+    macros_default.event(publicAPI, model, "pickChange");
+    vtkPicker(publicAPI, model);
+  }
+  var newInstance102 = macros_default.newInstance(extend106, "vtkPicker");
+  var Picker_default = {
+    newInstance: newInstance102,
+    extend: extend106
   };
 
   // src/webview/vtkParse.ts
+  function parseLegacyVTK(text) {
+    const nl1 = text.indexOf("\n");
+    if (nl1 < 0) return null;
+    const nl2 = text.indexOf("\n", nl1 + 1);
+    if (nl2 < 0) return null;
+    const nl3 = text.indexOf("\n", nl2 + 1);
+    if (nl3 < 0) return null;
+    const formatLine = text.slice(nl2 + 1, nl3).trim().toUpperCase();
+    if (formatLine === "BINARY") {
+      return parseBinaryLegacyVTK(binaryStringToBytes(text), nl3 + 1);
+    }
+    return parseAsciiLegacyVTK(text);
+  }
+  function binaryStringToBytes(s) {
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 255;
+    return out;
+  }
   function findToken(tokens, keyword, from = 0) {
     for (let i = from; i < tokens.length; i++) {
       if (tokens[i] === keyword) return i;
     }
     return -1;
   }
-  function readArrays(tokens, count, from, out) {
+  function readAsciiArrays(tokens, count, from, out) {
     let c = from;
     while (c < tokens.length) {
       const kw = tokens[c];
@@ -33161,7 +33022,7 @@ void main()
       }
     }
   }
-  function parseLegacyVTK(text) {
+  function parseAsciiLegacyVTK(text) {
     const tokens = text.split(/\s+/).filter(Boolean);
     const ptsIdx = findToken(tokens, "POINTS");
     if (ptsIdx < 0) return null;
@@ -33188,9 +33049,235 @@ void main()
     const cdIdx = findToken(tokens, "CELL_DATA", cursor);
     for (const idx of [pdIdx, cdIdx].filter((i) => i >= 0).sort((a, b) => a - b)) {
       const count = parseInt(tokens[idx + 1], 10);
-      readArrays(tokens, count, idx + 2, tokens[idx] === "POINT_DATA" ? pointData : cellData);
+      readAsciiArrays(tokens, count, idx + 2, tokens[idx] === "POINT_DATA" ? pointData : cellData);
     }
     return { points, polys, numPoints, numCells, pointData, cellData };
+  }
+  var BYTES_PER_TYPE = {
+    float: 4,
+    double: 8,
+    int: 4,
+    unsigned_int: 4,
+    long: 4,
+    unsigned_long: 4,
+    vtkIdType: 4,
+    short: 2,
+    unsigned_short: 2,
+    char: 1,
+    unsigned_char: 1,
+    signed_char: 1,
+    bit: 1
+  };
+  function isAsciiWhitespace(b) {
+    return b === 10 || b === 13 || b === 32 || b === 9;
+  }
+  function skipDelimiterWhitespace(bytes, pos) {
+    let p = pos;
+    while (p < bytes.length && isAsciiWhitespace(bytes[p])) p++;
+    return p;
+  }
+  function readAsciiLine(bytes, pos) {
+    let end = pos;
+    while (end < bytes.length && bytes[end] !== 10) end++;
+    let line = "";
+    for (let i = pos; i < end; i++) line += String.fromCharCode(bytes[i]);
+    if (line.endsWith("\r")) line = line.slice(0, -1);
+    return { line, next: Math.min(end + 1, bytes.length) };
+  }
+  function parseBinaryLegacyVTK(bytes, startPos) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let pos = startPos;
+    let points = new Float32Array(0);
+    let numPoints = 0;
+    let polys = new Uint32Array(0);
+    let numCells = 0;
+    const pointData = [];
+    const cellData = [];
+    let section = null;
+    let sectionCount = 0;
+    function readTypedArray(dtype, count) {
+      const bpe = BYTES_PER_TYPE[dtype] ?? 4;
+      const out = new Float32Array(count);
+      for (let i = 0; i < count; i++) {
+        if (pos + bpe > bytes.length) {
+          out[i] = 0;
+          continue;
+        }
+        let v;
+        switch (dtype) {
+          case "double":
+            v = view.getFloat64(pos, false);
+            break;
+          case "int":
+          case "long":
+          case "vtkIdType":
+            v = view.getInt32(pos, false);
+            break;
+          case "unsigned_int":
+          case "unsigned_long":
+            v = view.getUint32(pos, false);
+            break;
+          case "short":
+            v = view.getInt16(pos, false);
+            break;
+          case "unsigned_short":
+            v = view.getUint16(pos, false);
+            break;
+          case "char":
+          case "signed_char":
+            v = view.getInt8(pos);
+            break;
+          case "unsigned_char":
+          case "bit":
+            v = view.getUint8(pos);
+            break;
+          default:
+            v = view.getFloat32(pos, false);
+            break;
+        }
+        out[i] = v;
+        pos += bpe;
+      }
+      return out;
+    }
+    while (pos < bytes.length) {
+      pos = skipDelimiterWhitespace(bytes, pos);
+      if (pos >= bytes.length) break;
+      const { line, next } = readAsciiLine(bytes, pos);
+      pos = next;
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const parts = trimmed.split(/\s+/);
+      const kw = parts[0];
+      if (kw === "DATASET") {
+        continue;
+      } else if (kw === "POINTS") {
+        numPoints = parseInt(parts[1], 10);
+        points = readTypedArray(parts[2] || "float", numPoints * 3);
+      } else if (kw === "POLYGONS" || kw === "TRIANGLE_STRIPS") {
+        numCells = parseInt(parts[1], 10);
+        const totalInts = parseInt(parts[2], 10);
+        polys = Uint32Array.from(readTypedArray("int", totalInts));
+      } else if (kw === "POINT_DATA") {
+        section = "point";
+        sectionCount = parseInt(parts[1], 10);
+      } else if (kw === "CELL_DATA") {
+        section = "cell";
+        sectionCount = parseInt(parts[1], 10);
+      } else if (kw === "SCALARS") {
+        const name = parts[1];
+        const dtype = parts[2] || "float";
+        const numComponents = parts[3] ? parseInt(parts[3], 10) : 1;
+        pos = skipDelimiterWhitespace(bytes, pos);
+        const lt = readAsciiLine(bytes, pos);
+        if (lt.line.trim().toUpperCase().startsWith("LOOKUP_TABLE")) pos = lt.next;
+        const data = readTypedArray(dtype, sectionCount * numComponents);
+        (section === "cell" ? cellData : pointData).push({ name, numComponents, data });
+      } else if (kw === "VECTORS" || kw === "NORMALS") {
+        const name = parts[1];
+        const dtype = parts[2] || "float";
+        const data = readTypedArray(dtype, sectionCount * 3);
+        (section === "cell" ? cellData : pointData).push({ name, numComponents: 3, data });
+      } else if (kw === "FIELD") {
+        const numArrays = parseInt(parts[2], 10);
+        for (let a = 0; a < numArrays; a++) {
+          pos = skipDelimiterWhitespace(bytes, pos);
+          const hdr = readAsciiLine(bytes, pos);
+          pos = hdr.next;
+          const hp = hdr.line.trim().split(/\s+/);
+          const name = hp[0];
+          const numComponents = parseInt(hp[1], 10);
+          const numTuples = parseInt(hp[2], 10);
+          const dtype = hp[3] || "float";
+          const data = readTypedArray(dtype, numComponents * numTuples);
+          (section === "cell" ? cellData : pointData).push({ name, numComponents, data });
+        }
+      } else {
+        break;
+      }
+    }
+    if (numPoints === 0 && points.length === 0) return null;
+    return { points, polys, numPoints, numCells, pointData, cellData };
+  }
+
+  // src/webview/cameraOrient.ts
+  function computeFaceOnView(bounds, distanceFactor = 2.2) {
+    const [xmin, xmax, ymin, ymax, zmin, zmax] = bounds;
+    const dims = [xmax - xmin, ymax - ymin, zmax - zmin];
+    const center = [(xmin + xmax) / 2, (ymin + ymax) / 2, (zmin + zmax) / 2];
+    const maxDim = Math.max(...dims, 1e-6);
+    const thinAxis = dims.indexOf(Math.min(...dims));
+    const dir = [0.3, 0.3, 0.3];
+    dir[thinAxis] = 1.5;
+    const len4 = Math.hypot(dir[0], dir[1], dir[2]);
+    const dist3 = maxDim * distanceFactor;
+    const position = [
+      center[0] + dir[0] / len4 * dist3,
+      center[1] + dir[1] / len4 * dist3,
+      center[2] + dir[2] / len4 * dist3
+    ];
+    return { position, focalPoint: center, viewUp: [0, 0, 1] };
+  }
+
+  // src/webview/colormaps.ts
+  var COLORMAPS = [
+    {
+      id: "coolwarm",
+      label: "Cool \u2192 Warm (default)",
+      stops: [
+        [0, 0.231, 0.298, 0.753],
+        [0.5, 0.865, 0.865, 0.865],
+        [1, 0.706, 0.016, 0.15]
+      ]
+    },
+    {
+      id: "jet",
+      label: "Jet (vivid)",
+      stops: [
+        [0, 0, 0, 0.5],
+        [0.125, 0, 0, 1],
+        [0.375, 0, 1, 1],
+        [0.625, 1, 1, 0],
+        [0.875, 1, 0, 0],
+        [1, 0.5, 0, 0]
+      ]
+    },
+    {
+      id: "viridis",
+      label: "Viridis",
+      stops: [
+        [0, 68 / 255, 1 / 255, 84 / 255],
+        [0.25, 59 / 255, 82 / 255, 139 / 255],
+        [0.5, 33 / 255, 144 / 255, 141 / 255],
+        [0.75, 93 / 255, 200 / 255, 99 / 255],
+        [1, 253 / 255, 231 / 255, 37 / 255]
+      ]
+    },
+    {
+      id: "plasma",
+      label: "Plasma",
+      stops: [
+        [0, 13 / 255, 8 / 255, 135 / 255],
+        [0.25, 126 / 255, 3 / 255, 168 / 255],
+        [0.5, 204 / 255, 71 / 255, 120 / 255],
+        [0.75, 248 / 255, 148 / 255, 65 / 255],
+        [1, 240 / 255, 249 / 255, 33 / 255]
+      ]
+    },
+    {
+      id: "grayscale",
+      label: "Grayscale",
+      stops: [
+        [0, 0, 0, 0],
+        [1, 1, 1, 1]
+      ]
+    }
+  ];
+  function findColormap(id) {
+    return COLORMAPS.find((c) => c.id === id) ?? COLORMAPS[0];
+  }
+  function toCssGradientStops(cmap) {
+    return cmap.stops.map(([t, r, g, b]) => `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)}) ${t * 100}%`).join(", ");
   }
 
   // src/webview/fieldViewer.ts
@@ -33201,6 +33288,8 @@ void main()
   var legendBar = document.getElementById("legend-bar");
   var legendMin = document.getElementById("legend-min");
   var legendMax = document.getElementById("legend-max");
+  var colormapSelect = document.getElementById("colormap-select");
+  var legendPanel = document.getElementById("legend-panel");
   var renderWindow = null;
   var renderer = null;
   var glWindow = null;
@@ -33211,11 +33300,10 @@ void main()
   var polydata = null;
   var channels = [];
   var ready = false;
+  var currentColormapId = "coolwarm";
   function buildLookupTable() {
     const t = ColorTransferFunction_default.newInstance();
-    t.addRGBPoint(0, 0.231, 0.298, 0.753);
-    t.addRGBPoint(0.5, 0.865, 0.865, 0.865);
-    t.addRGBPoint(1, 0.706, 0.016, 0.15);
+    for (const [stopT, r, g, b] of findColormap(currentColormapId).stops) t.addRGBPoint(stopT, r, g, b);
     return t;
   }
   function init() {
@@ -33226,6 +33314,12 @@ void main()
     glWindow = RenderWindow_default2.newInstance();
     glWindow.setContainer(container);
     renderWindow.addView(glWindow);
+    const glCanvas = glWindow.getCanvas();
+    if (glCanvas) {
+      glCanvas.style.width = "100%";
+      glCanvas.style.height = "100%";
+      glCanvas.style.display = "block";
+    }
     const resize2 = () => {
       if (!glWindow) return;
       const w = container.clientWidth || 800, h = container.clientHeight || 400;
@@ -33236,8 +33330,7 @@ void main()
     interactor = RenderWindowInteractor_default.newInstance();
     interactor.setView(glWindow);
     interactor.initialize();
-    interactor.bindEvents(container);
-    interactor.setInteractorStyle(InteractorStyleTrackballCamera_default.newInstance());
+    bindMouseControls();
     lut = buildLookupTable();
     mapper = Mapper_default.newInstance();
     mapper.setLookupTable(lut);
@@ -33251,6 +33344,14 @@ void main()
     renderer.addActor(actor);
     resize2();
     ready = true;
+  }
+  function orientCameraForBounds(bounds) {
+    const camera = renderer?.getActiveCamera();
+    if (!camera) return;
+    const view = computeFaceOnView(bounds);
+    camera.setFocalPoint(...view.focalPoint);
+    camera.setPosition(...view.position);
+    camera.setViewUp(...view.viewUp);
   }
   function magnitudeOf(a) {
     const n = a.data.length / a.numComponents;
@@ -33329,7 +33430,7 @@ void main()
     mapper.setScalarRange(min4, max4);
     legendMin.textContent = min4.toPrecision(4);
     legendMax.textContent = max4.toPrecision(4);
-    legendBar.parentElement.style.visibility = "visible";
+    legendPanel.style.visibility = "visible";
     renderWindow?.render();
   }
   function loadDataset(text, fileName) {
@@ -33357,7 +33458,7 @@ void main()
       arraySelect.appendChild(opt);
       arraySelect.disabled = true;
       mapper?.setScalarVisibility(false);
-      legendBar.parentElement.style.visibility = "hidden";
+      legendPanel.style.visibility = "hidden";
     } else {
       arraySelect.disabled = false;
       channels.forEach((ch, i) => {
@@ -33369,9 +33470,211 @@ void main()
     }
     mapper?.setInputData(polydata);
     if (channels.length) applyChannel(0);
+    if (actor) orientCameraForBounds(actor.getBounds());
     renderer?.resetCamera();
+    if (clipEnabled) updateClipPlane();
     renderWindow?.render();
     label.textContent = `${fileName} \u2014 ${parsed.numPoints.toLocaleString()} pts, ${parsed.numCells.toLocaleString()} cells` + (channels.length ? `  |  ${channels.length} selectable field${channels.length === 1 ? "" : "s"}` : "");
+  }
+  var clipPlane = null;
+  var clipAxis = 0;
+  var clipFlipped = false;
+  var clipEnabled = false;
+  function updateClipPlane() {
+    if (!clipPlane || !polydata) return;
+    const bounds = polydata.getBounds();
+    const lo = bounds[clipAxis * 2], hi = bounds[clipAxis * 2 + 1];
+    const slider = document.getElementById("clip-slider");
+    const t = slider ? Number(slider.value) / 100 : 0.5;
+    const pos = lo + (hi - lo) * t;
+    const normal = [0, 0, 0];
+    normal[clipAxis] = clipFlipped ? -1 : 1;
+    const origin = [(bounds[0] + bounds[1]) / 2, (bounds[2] + bounds[3]) / 2, (bounds[4] + bounds[5]) / 2];
+    origin[clipAxis] = pos;
+    clipPlane.setNormal(normal[0], normal[1], normal[2]);
+    clipPlane.setOrigin(origin[0], origin[1], origin[2]);
+    renderWindow?.render();
+  }
+  function setClipEnabled(enabled) {
+    clipEnabled = enabled;
+    document.getElementById("clip-toggle")?.classList.toggle("active", enabled);
+    if (!mapper) return;
+    mapper.removeAllClippingPlanes();
+    if (enabled) {
+      if (!clipPlane) clipPlane = Plane_default.newInstance();
+      mapper.addClippingPlane(clipPlane);
+      updateClipPlane();
+    } else {
+      renderWindow?.render();
+    }
+  }
+  function setClipAxis(axis) {
+    clipAxis = axis;
+    ["clip-axis-x", "clip-axis-y", "clip-axis-z"].forEach((id, i) => document.getElementById(id)?.classList.toggle("active", i === axis));
+    if (clipEnabled) updateClipPlane();
+  }
+  function toggleClipFlip() {
+    clipFlipped = !clipFlipped;
+    document.getElementById("clip-flip")?.classList.toggle("active", clipFlipped);
+    if (clipEnabled) updateClipPlane();
+  }
+  document.getElementById("clip-toggle")?.addEventListener("click", () => setClipEnabled(!clipEnabled));
+  document.getElementById("clip-axis-x")?.addEventListener("click", () => setClipAxis(0));
+  document.getElementById("clip-axis-y")?.addEventListener("click", () => setClipAxis(1));
+  document.getElementById("clip-axis-z")?.addEventListener("click", () => setClipAxis(2));
+  document.getElementById("clip-flip")?.addEventListener("click", toggleClipFlip);
+  document.getElementById("clip-slider")?.addEventListener("input", () => {
+    if (clipEnabled) updateClipPlane();
+  });
+  setClipAxis(0);
+  function getCamera() {
+    return renderer?.getActiveCamera() ?? null;
+  }
+  function rotateStep(azimuthDeg, elevationDeg) {
+    const camera = getCamera();
+    if (!camera || !renderer) return;
+    if (azimuthDeg) camera.azimuth(azimuthDeg);
+    if (elevationDeg) camera.elevation(elevationDeg);
+    camera.orthogonalizeViewUp();
+    renderer.resetCameraClippingRange();
+    renderWindow?.render();
+  }
+  function cross32(a, b) {
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  }
+  function normalize32(v) {
+    const len4 = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / len4, v[1] / len4, v[2] / len4];
+  }
+  function panStep(dx, dy) {
+    const camera = getCamera();
+    if (!camera || !renderer) return;
+    const dop = camera.getDirectionOfProjection();
+    const up = normalize32(camera.getViewUp());
+    const right = normalize32(cross32(dop, up));
+    const scale7 = camera.getDistance() * 0.08;
+    camera.translate(
+      (right[0] * dx + up[0] * dy) * scale7,
+      (right[1] * dx + up[1] * dy) * scale7,
+      (right[2] * dx + up[2] * dy) * scale7
+    );
+    renderer.resetCameraClippingRange();
+    renderWindow?.render();
+  }
+  function zoomStep(factor) {
+    const camera = getCamera();
+    if (!camera || !renderer) return;
+    camera.zoom(factor);
+    renderer.resetCameraClippingRange();
+    renderWindow?.render();
+  }
+  var picker = Picker_default.newInstance();
+  function pickWorldPoint(clientX, clientY) {
+    if (!renderer) return null;
+    const rect = container.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = rect.height - (clientY - rect.top);
+    picker.pick([x, y, 0], renderer);
+    const actors = picker.getActors();
+    if (!actors || !actors.length) return null;
+    return picker.getPickPosition();
+  }
+  function retargetTo(point) {
+    const camera = getCamera();
+    if (!camera) return;
+    camera.setFocalPoint(point[0], point[1], point[2]);
+    renderer?.resetCameraClippingRange();
+  }
+  var dragMode = "rotate";
+  var mouseDown = false;
+  var lastX = 0;
+  var lastY = 0;
+  function bindMouseControls() {
+    container.addEventListener("contextmenu", (e) => e.preventDefault());
+    container.addEventListener("mousedown", (e) => {
+      mouseDown = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      dragMode = e.button === 2 ? "pan" : "rotate";
+      if (dragMode === "rotate") {
+        const p = pickWorldPoint(e.clientX, e.clientY);
+        if (p) retargetTo(p);
+      }
+    });
+    window.addEventListener("mouseup", () => {
+      mouseDown = false;
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!mouseDown) return;
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (dragMode === "pan") {
+        const camera = getCamera();
+        if (!camera || !renderer) return;
+        const dop = camera.getDirectionOfProjection();
+        const up = normalize32(camera.getViewUp());
+        const right = normalize32(cross32(dop, up));
+        const scale7 = camera.getDistance() * 15e-4;
+        camera.translate(
+          (-right[0] * dx + up[0] * dy) * scale7,
+          (-right[1] * dx + up[1] * dy) * scale7,
+          (-right[2] * dx + up[2] * dy) * scale7
+        );
+        renderer.resetCameraClippingRange();
+        renderWindow?.render();
+      } else {
+        rotateStep(dx * 0.25, -dy * 0.25);
+      }
+    });
+    container.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      zoomStep(Math.exp(-e.deltaY * 6e-4));
+    }, { passive: false });
+  }
+  function fitView() {
+    renderer?.resetCamera();
+    renderWindow?.render();
+  }
+  function resetView() {
+    if (polydata) orientCameraForBounds(polydata.getBounds());
+    renderer?.resetCamera();
+    renderWindow?.render();
+  }
+  var orthoOn = false;
+  function toggleOrtho() {
+    const camera = getCamera();
+    if (!camera) return;
+    orthoOn = !orthoOn;
+    camera.setParallelProjection(orthoOn);
+    document.getElementById("nav-ortho")?.classList.toggle("active", orthoOn);
+    renderer?.resetCameraClippingRange();
+    renderWindow?.render();
+  }
+  function takeScreenshot() {
+    if (!glWindow || !renderWindow) return;
+    renderWindow.render();
+    const canvas = container.querySelector("canvas");
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    window.vsApi?.postMessage({ command: "saveScreenshot", dataBase64: dataUrl.split(",")[1] });
+  }
+  var NAV_BUTTONS = [
+    ["nav-rot-left", () => rotateStep(-15, 0)],
+    ["nav-rot-right", () => rotateStep(15, 0)],
+    ["nav-tilt-up", () => rotateStep(0, 15)],
+    ["nav-tilt-down", () => rotateStep(0, -15)],
+    ["nav-pan-left", () => panStep(-1, 0)],
+    ["nav-pan-right", () => panStep(1, 0)],
+    ["nav-pan-up", () => panStep(0, 1)],
+    ["nav-pan-down", () => panStep(0, -1)],
+    ["nav-fit", fitView],
+    ["nav-reset", resetView],
+    ["nav-ortho", toggleOrtho],
+    ["nav-screenshot", takeScreenshot]
+  ];
+  for (const [id, fn] of NAV_BUTTONS) {
+    document.getElementById(id)?.addEventListener("click", fn);
   }
   arraySelect.addEventListener("change", () => applyChannel(Number(arraySelect.value)));
   repButtons.forEach((btn) => {
@@ -33386,16 +33689,57 @@ void main()
       renderWindow?.render();
     });
   });
+  var loadingEl = document.getElementById("loading-state");
+  var loadingTextEl = document.getElementById("loading-text");
+  function showLoading(fileName) {
+    if (loadingTextEl) loadingTextEl.textContent = fileName ? `Loading ${fileName}\u2026` : "Loading\u2026";
+    if (loadingEl) loadingEl.style.display = "flex";
+    document.getElementById("empty-state")?.style.setProperty("display", "none");
+  }
+  function hideLoading() {
+    if (loadingEl) loadingEl.style.display = "none";
+  }
+  function afterPaint(fn) {
+    requestAnimationFrame(() => requestAnimationFrame(fn));
+  }
   window.addEventListener("message", (ev) => {
     const msg = ev.data;
-    if (msg.command === "previewField") {
-      try {
-        const text = atob(msg.dataBase64);
-        loadDataset(text, msg.fileName || "");
-      } catch (err) {
-        label.textContent = "Parse error: " + (err instanceof Error ? err.message : String(err));
-      }
+    if (msg.command === "loading") {
+      showLoading(msg.fileName);
+    } else if (msg.command === "previewField") {
+      showLoading(msg.fileName);
+      afterPaint(() => {
+        try {
+          const text = atob(msg.dataBase64);
+          loadDataset(text, msg.fileName || "");
+        } catch (err) {
+          label.textContent = "Parse error: " + (err instanceof Error ? err.message : String(err));
+        } finally {
+          hideLoading();
+        }
+      });
     }
   });
-  legendBar.style.background = "linear-gradient(to right, rgb(59,76,192), rgb(221,221,221), rgb(180,4,38))";
+  function renderLegendGradient() {
+    legendBar.style.background = `linear-gradient(to top, ${toCssGradientStops(findColormap(currentColormapId))})`;
+  }
+  renderLegendGradient();
+  if (colormapSelect) {
+    for (const cmap of COLORMAPS) {
+      const opt = document.createElement("option");
+      opt.value = cmap.id;
+      opt.textContent = cmap.label;
+      colormapSelect.appendChild(opt);
+    }
+    colormapSelect.value = currentColormapId;
+    colormapSelect.addEventListener("change", () => {
+      currentColormapId = colormapSelect.value;
+      lut = buildLookupTable();
+      mapper?.setLookupTable(lut);
+      renderLegendGradient();
+      if (channels.length) applyChannel(Number(arraySelect.value) || 0);
+      renderWindow?.render();
+    });
+  }
+  window.vsApi?.postMessage({ command: "ready" });
 })();
